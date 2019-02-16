@@ -92,7 +92,11 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
     markers = MeshFunction('int', mesh)
     hdf.read(markers, mesh_folder + "subdomains")
 
-    # Read Permittivity from File
+    #---------------------------------------------------------------------------
+    # Permittivity coefficient for previously defined subdomains
+    #---------------------------------------------------------------------------
+
+    # Read permittivity tensor from permittivity_file
     ifile = open(permittivity_file, 'r')
 
     eps_input = [None] * 4; k = 0
@@ -104,7 +108,6 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
 
     # Domain definition coefficients
     class Coeff(Expression):
-        """Domain defining coefficient"""
 
         def __init__(self, mesh, **kwargs):
             self.markers = markers
@@ -126,7 +129,7 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
         def value_shape(self):
             return (2,2)
 
-    # Permittivity
+    # Interpolation to zeroth order polynomial
     permittivity = Coeff(mesh, degree=0)
 
     return mesh, markers, permittivity
@@ -134,7 +137,7 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
 
 
 def plane_wave_2D(s, p, k0L):
-    """Plane Wave E = p exp(i * k0L * s.x)"""
+    """Plane Wave excitation E = p exp(i * k0L * s.x)"""
 
     # Input Variables:
         # s: plane wave direction of propagation (unit vector)
@@ -142,26 +145,29 @@ def plane_wave_2D(s, p, k0L):
         # k0L: wave number (positive real number)
 
     # Output Variables:
-        # plane_wave_r: real part of incoming plane wave
-        # plane_wave_i: imaginary part of incoming plane wave
+        # pw_r: real part of incoming plane wave
+        # pw_i: imaginary part of incoming plane wave
 
+
+    # Check if polarization is orthogonal to direction of propagation
     if (s[0] * p[0] + s[1] * p[1]) <= 1E-8:
-        """In a Plane Wave amplitude is orthogonal to direction of propagation"""
 
         # make unit vectors from s and p
         s_norm = sqrt(s[0] ** 2 + s[1] ** 2); s[0], s[1] = s[0] / s_norm, s[1] / s_norm;
         p_norm = sqrt(p[0] ** 2 + p[1] ** 2); p[0], p[1] = p[0] / p_norm, p[1] / p_norm
 
-        plane_wave_r = Expression(\
+        pw_r = Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * cos(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-        plane_wave_i = Expression(\
+        pw_i = Expression(\
         ('px * sin(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
+    # Make it orthogonal by ignoring electric field component in the
+    # direction of propagation
     else:
 
         # Subtract from polarization vector projection in the direction of the propagation
@@ -172,24 +178,26 @@ def plane_wave_2D(s, p, k0L):
         s_norm = sqrt(s[0] ** 2 + s[1] ** 2); s_x, s_y = s[0] / s_norm, s[1] / s_norm;
         p_norm = sqrt(p[0] ** 2 + p[1] ** 2); px, py = p[0] / p_norm, p[1] / p_norm
 
-        plane_wave_r = Expression(\
+        pw_r = Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * cos(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-        plane_wave_i = Expression(\
+        pw_i = Expression(\
         ('px * sin(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-    return plane_wave_r, plane_wave_i
+    return pw_r, pw_i
 #-------------------------------------------------------------------------------
 
 
 def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
+    """Electromagnetic scattering solver based on FEM"""
+
     # Input Variables:
         # mesh: mesh keeping variable
-        # permittivity: permittivity
+        # permittivity: permittivity variable (anisotropic 2x2 matrix function)
         # pwr: real part of incoming plane wave
         # pwi: imaginary part of incoming plane wave
         # k0L: name of .h5 file in which mesh is stored
@@ -209,20 +217,20 @@ def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
     # Weak formulation
     #---------------------------------------------------------------------------
     Es_r, Es_i = TrialFunctions(W)
-    vr, vi = TestFunctions(W)
+    v_r, v_i = TestFunctions(W)
     n = FacetNormal(mesh)
 
-    ar = inner(curl(Es_r), curl(vr)) * dx - k0L * k0L * inner(permittivity * Es_r, vr) * dx + \
-        k0L * (inner(n, Es_i) * inner(n, vr) - inner(Es_i, vr)) * ds
+    a_r = inner(curl(Es_r), curl(v_r)) * dx - k0L * k0L * inner(permittivity * Es_r, v_r) * dx + \
+        k0L * (inner(n, Es_i) * inner(n, v_r) - inner(Es_i, v_r)) * ds
 
-    ai = inner(curl(Es_i), curl(vi)) * dx - k0L * k0L * inner(permittivity * Es_i, vi) * dx - \
-        k0L * (inner(n, Es_r) * inner(n, vi) - inner(Es_r, vi)) * ds
+    a_i = inner(curl(Es_i), curl(v_i)) * dx - k0L * k0L * inner(permittivity * Es_i, v_i) * dx - \
+        k0L * (inner(n, Es_r) * inner(n, v_i) - inner(Es_r, v_i)) * ds
 
-    Lr = - k0L * k0L * inner((II - permittivity) * pwr, vr) * dx
-    Li = - k0L * k0L * inner((II - permittivity) * pwi, vi) * dx
+    L_r = - k0L * k0L * inner((II - permittivity) * pwr, v_r) * dx
+    L_i = - k0L * k0L * inner((II - permittivity) * pwi, v_i) * dx
 
     # Final variational form
-    F = ar + ai - Lr - Li
+    F = a_r + a_i - L_r - L_i
 
     # Splitting the variational form into LHS and RHS
     a, L = lhs(F), rhs(F)
