@@ -191,8 +191,8 @@ def solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L):
         # k0L: dimensionless parameter describing wave vector length
 
     # Output Variables:
-        # Er: real part of total electric field
-        # Ei: imaginary part of total electric field
+        # E_r: real part of total electric field
+        # E_i: imaginary part of total electric field
 
     #---------------------------------------------------------------------------
     # Finite Element function spaces (Nedelec N1curl space), mixed formulation
@@ -236,9 +236,9 @@ def solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L):
     EI_r = interpolate(pw_r, V); EI_i = interpolate(pw_i, V)
 
     # Total Field = Incident Field + Scattered Field
-    Er = Es_r + EI_r;  Ei = Es_i + EI_i
+    E_r = Es_r + EI_r;  E_i = Es_i + EI_i
 
-    return Er, Ei
+    return E_r, E_i
 #-------------------------------------------------------------------------------
 
 
@@ -325,10 +325,10 @@ if __name__ == "__main__":
     EP1_r = project(E_r, V3);  EP1_i = project(E_i, V3);
 
     # Output files in PVD (for ParaView) and HDF5 (for later processing) format
-    save_PVD(output_folder + '/PVD/', 'Er', EP1_r);
-    save_PVD(output_folder + '/PVD/', 'Ei', EP1_i)
-    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Er', EP1_r)
-    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Ei', EP1_i)
+    save_PVD(output_folder + '/PVD/', 'E_r', EP1_r);
+    save_PVD(output_folder + '/PVD/', 'E_i', EP1_i)
+    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'E_r', EP1_r)
+    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'E_i', EP1_i)
 
     # Far field computation
     phi, ff = ff_isotropic_2D(permittivity, k0L, EP1_r, EP1_i, FF_n)
