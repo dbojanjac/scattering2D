@@ -1,16 +1,15 @@
-# FEM based solver for electromagnetic wave scattering in 2D on anisotropic or
-# heterogeneous isotropic material based on weak formulatio and FEM
+# FEM based solver for electromagnetic wave scattering in 2D on anisotropic material
 
-# Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
-# ie. python3 isotropic2D.py mesh isotropic results 36
+# Function call: python3 anisotropic2D.py mesh_folder mesh_name output_folder FF_n
+# ie. python3 anisotropic2D.py mesh anisotropic results 36
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
 
+
 # Using FEniCS 2017.2.0
 from dolfin import *
 import numpy as np
-import sys
 
 
 def read_HDF5_file(solution_folder, mesh, solution):
@@ -36,7 +35,7 @@ def read_HDF5_file(solution_folder, mesh, solution):
 #-------------------------------------------------------------------------------
 
 
-def save_PVD(Output_Folder, Output_Name, u):
+def save_PVD_file(Output_Folder, Output_Name, u):
     """Save function u and coresponding mesh to .pvd file format"""
 
     # Input Variables:
@@ -52,7 +51,7 @@ def save_PVD(Output_Folder, Output_Name, u):
 #-------------------------------------------------------------------------------
 
 
-def save_HDF5(Output_Folder, mesh, mesh_name, Field, u):
+def save_HDF5_file(Output_Folder, mesh, mesh_name, Field, u):
     """Save function u and coresponding mesh to .h5 file format"""
 
     # Input Variables:
@@ -70,18 +69,14 @@ def save_HDF5(Output_Folder, mesh, mesh_name, Field, u):
 #-------------------------------------------------------------------------------
 
 
-def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permittivity, air):
-    """Read mesh and subdomains, from .h5 mesh file, for heterogeneous isotropic domain"""
-
+def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
+    """Read mesh and subdomains, from .h5 mesh file, for homogeneous anisotropic domain"""
     # Input Variables:
         # mesh_folder: mesh in .h5 file format contaning folder
         # mesh_name: name of the mesh containing file (in .h5 format), mesh subdomains
                    # are stored in subdomains part of mesh_folder/mesh_name.h5 file
-                   # coefficient 3 represents patch_permittivity,  2 represents sillica and
-                   # 1 represents fresh air
-        # patch_permittivity: free space permittivity coefficient
-        # matrix_permittivity: material matrix permittivity coefficient
-
+                   # coefficient 3 represents inner_permittivity and 1 represents box of anisotropic material
+        # permittivity_file: 3 x 3 matrix of anisotropic permittivity stored in file permittivity_file
     # Output Variables:
         # mesh: mesh read from mesh_folder/Mesh_nNme.h5 file
         # markers: physical subdomains defining function
@@ -92,16 +87,24 @@ def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permitt
     mesh_folder = mesh_folder + '/'
 
     mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), mesh_folder + mesh_name + '.h5', 'r')
-
+    hdf = HDF5File(mesh.mpi_comm(), mesh_folder + mesh_name, 'r')
     hdf.read(mesh, mesh_folder + "mesh", False)
     markers = MeshFunction('int', mesh)
     hdf.read(markers, mesh_folder + "subdomains")
 
-    #---------------------------------------------------------------------------
-    # Permittivity coefficient for previously defined subdomains
-    #---------------------------------------------------------------------------
+    # Read Permittivity from File
+    ifile = open(permittivity_file, 'r')
+
+    eps_input = [None] * 4; k = 0
+    for line in ifile:
+        coeff = line.split()
+        for m in range(0, 2):
+            eps_input[m + 2 * k] = float(coeff[m])
+        k += 1
+
+    # Domain definition coefficients
     class Coeff(Expression):
+        """Domain defining coefficient"""
 
         def __init__(self, mesh, **kwargs):
             self.markers = markers
@@ -109,15 +112,21 @@ def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permitt
         def eval_cell(self, values, x, cell):
 
             if markers[cell.index] == 3:
-                values[0] = patch_permittivity
+                values[0] = 1
+                values[1] = 0
+                values[2] = 0
+                values[3] = 1
 
-            if markers[cell.index] == 2:
-                values[0] = matrix_permittivity
+            if markers[cell.index] == 1:
+                values[0] = eps_input[0]
+                values[1] = eps_input[1]
+                values[2] = eps_input[3]
+                values[3] = eps_input[4]
 
-            else:
-                values[0] = air
+        def value_shape(self):
+            return (2,2)
 
-    # Interpolation to zeroth order polynomial
+    # Permittivity
     permittivity = Coeff(mesh, degree=0)
 
     return mesh, markers, permittivity
@@ -125,7 +134,7 @@ def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permitt
 
 
 def plane_wave_2D(s, p, k0L):
-    """Plane Wave excitation E = p exp(i * k0L * s.x)"""
+    """Plane Wave E = p exp(i * k0L * s.x)"""
 
     # Input Variables:
         # s: plane wave direction of propagation (unit vector)
@@ -136,9 +145,8 @@ def plane_wave_2D(s, p, k0L):
         # plane_wave_r: real part of incoming plane wave
         # plane_wave_i: imaginary part of incoming plane wave
 
-
-    # Check if polarization is orthogonal to direction of propagation
     if (s[0] * p[0] + s[1] * p[1]) <= 1E-8:
+        """In a Plane Wave amplitude is orthogonal to direction of propagation"""
 
         # make unit vectors from s and p
         s_norm = sqrt(s[0] ** 2 + s[1] ** 2); s[0], s[1] = s[0] / s_norm, s[1] / s_norm;
@@ -154,8 +162,6 @@ def plane_wave_2D(s, p, k0L):
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-    # Make it orthogonal by ignoring electric field component in the
-    # direction of propagation
     else:
 
         # Subtract from polarization vector projection in the direction of the propagation
@@ -180,26 +186,24 @@ def plane_wave_2D(s, p, k0L):
 #-------------------------------------------------------------------------------
 
 
-def solver_isotropic_2D(mesh, permittivity, pwr, pwi, k0L):
-    """Electromagnetic scattering solver based on FEM"""
-
+def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
     # Input Variables:
         # mesh: mesh keeping variable
-        # permittivity: permittivity variable (isotropic function)
+        # permittivity: permittivity
         # pwr: real part of incoming plane wave
         # pwi: imaginary part of incoming plane wave
-        # k0L: dimensionless parameter describing wave vector length
-
+        # k0L: name of .h5 file in which mesh is stored
     # Output Variables:
-        # Er: real part of total electric field
-        # Ei: imaginary part of total electric field
+        # Er: real part of total field
+        # Ei: imaginary part of total field
 
-    #---------------------------------------------------------------------------
-    # Finite Element function spaces (Nedelec N1curl space), mixed formulation
-    #---------------------------------------------------------------------------
+    # Nedelec Elements Function space
     NED = FiniteElement('N1curl', mesh.ufl_cell(), 1)
     V = FunctionSpace(mesh, 'N1curl', 1)
     W = FunctionSpace(mesh, NED * NED)
+
+    # Unit matrix
+    II = as_matrix(((1, 0), (0,1)))
 
     #---------------------------------------------------------------------------
     # Weak formulation
@@ -214,8 +218,8 @@ def solver_isotropic_2D(mesh, permittivity, pwr, pwi, k0L):
     ai = inner(curl(Es_i), curl(vi)) * dx - k0L * k0L * inner(permittivity * Es_i, vi) * dx - \
         k0L * (inner(n, Es_r) * inner(n, vi) - inner(Es_r, vi)) * ds
 
-    Lr = - k0L * k0L * inner((1 - permittivity) * pwr, vr) * dx
-    Li = - k0L * k0L * inner((1 - permittivity) * pwi, vi) * dx
+    Lr = - k0L * k0L * inner((II - permittivity) * pwr, vr) * dx
+    Li = - k0L * k0L * inner((II - permittivity) * pwi, vi) * dx
 
     # Final variational form
     F = ar + ai - Lr - Li
@@ -242,26 +246,18 @@ def solver_isotropic_2D(mesh, permittivity, pwr, pwi, k0L):
 #-------------------------------------------------------------------------------
 
 
-def ff_isotropic_2D(permittivity, k0L, e_r, e_i, m):
-    """Far Field calculator"""
 
-    # Input Variables:
-        # mesh: mesh keeping variable
-        # permittivity: permittivity
-        # pwr: real part of incoming plane wave
-        # pwi: imaginary part of incoming plane wave
-        # k0L: name of .h5 file in which mesh is stored
 
-    # Output Variables:
-        # phi: angle list
-        # ff: far field value
+def ff_anisotropic_2D(permittivity, k0L, e_r, e_i, m):
 
     step = 1 / float(m - 1)
 
     phi = np.linspace(step / 2, 2 * 3.1415 - step / 2, num = m)
 
     rez1r = [0] * m;   rez2r = [0] * m; rez1i = [0] * m;    rez2i = [0] * m
-    ff21 = [0] * m;   ff22 = [0] * m;     ff = [0] * m;
+    a21 = [0] * m;   a22 = [0] * m;     a = [0] * m;
+
+    II = as_matrix(((1, 0), (0,1)))
 
     for n in range (0, m):
 
@@ -275,32 +271,34 @@ def ff_isotropic_2D(permittivity, k0L, e_r, e_i, m):
 
         e1 = as_vector([1, 0]);   e2 = as_vector([0, 1])
 
-        rez1r[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A1 * (e_r * fr + e_i * fi), e1) * dx) / (4 * 3.1415)
-        rez2r[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A2 * (e_r * fr + e_i * fi), e2) * dx) / (4 * 3.1415)
+        rez1r[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A1) * (e_r * fr + e_i * fi), e1) * dx) / (4 * 3.1415)
+        rez2r[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A2) * (e_r * fr + e_i * fi), e2) * dx) / (4 * 3.1415)
 
-        rez1i[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A1 * (e_i * fr - e_r * fi), e1) * dx) / (4 * 3.1415)
-        rez2i[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A2 * (e_i * fr - e_r * fi), e2) * dx) / (4 * 3.1415)
-
-        ff21[n] = rez1r[n] * rez1r[n] + rez1i[n] * rez1i[n]
-        ff22[n] = rez2r[n] * rez2r[n] + rez2i[n] * rez2i[n]
-
-        ff[n] = np.sqrt(ff21[n] + ff22[n])
+        rez1i[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A1) * (e_i * fr - e_r * fi), e1) * dx) / (4 * 3.1415)
+        rez2i[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A2) * (e_i * fr - e_r * fi), e2) * dx) / (4 * 3.1415)
 
 
-    return phi, ff
-#-------------------------------------------------------------------------------
+        a21[n] = rez1r[n] * rez1r[n] + rez1i[n] * rez1i[n]
+        a22[n] = rez2r[n] * rez2r[n] + rez2i[n] * rez2i[n]
+
+        a[n] = np.sqrt(a21[n] + a22[n])
+
+    return phi, a
+
+
 
 
 
 if __name__ == "__main__":
 
     # Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
-    # ie. python3 isotropic2D.py mesh isotropic results 36
+    # ie. python3 anisotropic2D.py mesh anisotropic results 36
 
     mesh_folder = sys.argv[1]
     mesh_name = sys.argv[2]
-    output_folder = sys.argv[3]
-    FF_n = int(sys.argv[4])
+    permittivity_file = sys.argv[3]
+    output_folder = sys.argv[4]
+    FF_n = int(sys.argv[5])
 
     # Domain defining permittivity coefficients
     patch_permittivity = 1
@@ -316,7 +314,7 @@ if __name__ == "__main__":
     mesh, markers, permittivity = mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permittivity, air)
 
     # Solver call
-    E_r, E_i = solver_isotropic_2D(mesh, permittivity, pwr, pwi, k0L)
+    E_r, E_i = solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L)
 
     # P1 FE space
     V3 = VectorFunctionSpace(mesh, 'P', 1); V = FunctionSpace(mesh, 'P', 1)
