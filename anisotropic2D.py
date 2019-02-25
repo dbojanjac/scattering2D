@@ -164,6 +164,7 @@ def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
         # pwr: real part of incoming plane wave
         # pwi: imaginary part of incoming plane wave
         # k0L: name of .h5 file in which mesh is stored
+
     # Output Variables:
         # Er: real part of total field
         # Ei: imaginary part of total field
@@ -215,8 +216,6 @@ def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
 
     return Er, Ei
 #-------------------------------------------------------------------------------
-
-
 
 
 def ff_anisotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n):
