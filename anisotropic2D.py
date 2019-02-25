@@ -310,14 +310,17 @@ def save_HDF5(output_folder, mesh, mesh_name, Field, u):
 
     return 0
 #-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
 
+#-------------------------------------------------------------------------------
+# Main part
+#-------------------------------------------------------------------------------
 
 if __name__ == "__main__":
 
     # Function call: python3 anisotropic2D.py mesh_folder mesh_name permittivity_file output_folder FF_n
     # ie. python3 anisotropic2D.py mesh anisotropic effective results 72
 
+    # Input parameters
     mesh_folder = sys.argv[1]
     mesh_name = sys.argv[2]
     permittivity_file = sys.argv[3]

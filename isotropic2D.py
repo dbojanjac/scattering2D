@@ -309,6 +309,7 @@ if __name__ == "__main__":
     # Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
     # ie. python3 isotropic2D.py mesh isotropic results 72
 
+    # Input parameters
     mesh_folder = sys.argv[1]
     mesh_name = sys.argv[2]
     output_folder = sys.argv[3]
