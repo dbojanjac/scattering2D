@@ -1,7 +1,13 @@
 # FEM based solver for electromagnetic wave scattering in 2D on anisotropic material
 
-# Function call: python3 anisotropic2D.py mesh_folder mesh_name output_folder FF_n
-# ie. python3 anisotropic2D.py mesh anisotropic results 36
+    # Incoming plane wave parameters such as frequency k0L,  polarization p
+    # and direction s (E = p exp(i * k0L * s.x)) are hardcoded in main part as:
+    #   s = [1, 2];    p = [-2, 1];  k0L = 3.141592653589793
+    # while permittivity for anisotropic medium is stored in perrmitivity_file as
+    # 2x2 matrix
+
+# Function call: python3 anisotropic2D.py mesh_folder mesh_name permittivity_file output_folder FF_n
+# ie. python3 anisotropic2D.py mesh anisotropic effective results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
@@ -10,67 +16,29 @@
 # Using FEniCS 2017.2.0
 from dolfin import *
 import numpy as np
+import sys
 
 
-def read_HDF5_file(solution_folder, mesh, solution):
-    """Read function solution and coresponding mesh from .h5 file format"""
+def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file, air_permittivity):
+    """Read mesh and subdomains, from .h5 mesh file, for homogeneous anisotropic domain"""
 
     # Input Variables:
-        # Solutiont_Folder: folder where .h5 file will be store, format folder/
-        # mesh: mesh keeping variable
-        # solution: name of .h5 file in which mesh is stored
+        # mesh_folder: mesh contaning folder
+        # mesh_name: name of the mesh file (in .h5 format), mesh subdomains are
+                   # stored in subdomains part of mesh_folder/mesh_name.h5 file
+                   # coefficients in elements:
+                        #   1 represents anisotropic material
+                        #   3 outside material (air_permittivity)
 
     # Output Variables:
-        # u: function read from solution_folder/solution.h5 file in Function Space V
-        # mesh: mesh read from solution_folder/solution.h5 file
+        # mesh: FEniCS mesh variable
+        # markers: MeshFunction describing mesh subdomains according to:
+                        #   1 represents outside material (air_permittivity)
+                        #   2 represents material matrix (matrix_permittivity)
+                        #   3 represents inner material (patch_permittivity)
 
-    mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), solution_folder + solution, 'r')
-    hdf.read(mesh, solution_folder + 'mesh', False)
+        # permittivity: zeroth order polynomial, permittivity function
 
-    V = VectorFunctionSpace(mesh, 'P', 1);   u = Function(V)
-    hdf.read(u, solution_folder + 'solution');  hdf.close()
-
-    return u, mesh, V
-#-------------------------------------------------------------------------------
-
-
-def save_PVD_file(Output_Folder, Output_Name, u):
-    """Save function u and coresponding mesh to .pvd file format"""
-
-    # Input Variables:
-        # Output_Folder: folder where .h5 file will be store, format folder/
-        # mesh_name: name of .h5 file in which mesh is stored
-        # Field:
-        # u: function that will be saved in 'Output_Folder/Field_mesh_name.pvd' file
-
-    vtkfile = File(Output_Folder + Output_Name + '.pvd')
-    vtkfile << u
-
-    return 0
-#-------------------------------------------------------------------------------
-
-
-def save_HDF5_file(Output_Folder, mesh, mesh_name, Field, u):
-    """Save function u and coresponding mesh to .h5 file format"""
-
-    # Input Variables:
-        # Output_Folder: folder where .h5 file will be store, format folder/
-        # mesh: mesh keeping variable
-        # mesh_name: name of .h5 file in which mesh is stored
-        # Field:
-        # u: function that will be saved in 'Output_Folder/Field_mesh_name.h5' file
-
-    hdf = HDF5File(mesh.mpi_comm(), Output_Folder + Field + '_' + mesh_name + '.h5', 'w')
-    hdf.write(mesh, Output_Folder + 'mesh')
-    hdf.write(u, Output_Folder + 'solution');   hdf.close()
-
-    return 0
-#-------------------------------------------------------------------------------
-
-
-def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
-    """Read mesh and subdomains, from .h5 mesh file, for homogeneous anisotropic domain"""
     # Input Variables:
         # mesh_folder: mesh in .h5 file format contaning folder
         # mesh_name: name of the mesh containing file (in .h5 format), mesh subdomains
@@ -87,7 +55,7 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
     mesh_folder = mesh_folder + '/'
 
     mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), mesh_folder + mesh_name, 'r')
+    hdf = HDF5File(mesh.mpi_comm(), mesh_folder + mesh_name + '.h5', 'r')
     hdf.read(mesh, mesh_folder + "mesh", False)
     markers = MeshFunction('int', mesh)
     hdf.read(markers, mesh_folder + "subdomains")
@@ -115,16 +83,16 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file):
         def eval_cell(self, values, x, cell):
 
             if markers[cell.index] == 3:
-                values[0] = 1
+                values[0] = air_permittivity
                 values[1] = 0
                 values[2] = 0
-                values[3] = 1
+                values[3] = air_permittivity
 
             if markers[cell.index] == 1:
                 values[0] = eps_input[0]
                 values[1] = eps_input[1]
-                values[2] = eps_input[3]
-                values[3] = eps_input[4]
+                values[2] = eps_input[2]
+                values[3] = eps_input[3]
 
         def value_shape(self):
             return (2,2)
@@ -153,8 +121,11 @@ def plane_wave_2D(s, p, k0L):
     if (s[0] * p[0] + s[1] * p[1]) <= 1E-8:
 
         # make unit vectors from s and p
-        s_norm = sqrt(s[0] ** 2 + s[1] ** 2); s[0], s[1] = s[0] / s_norm, s[1] / s_norm;
-        p_norm = sqrt(p[0] ** 2 + p[1] ** 2); p[0], p[1] = p[0] / p_norm, p[1] / p_norm
+        s_norm = sqrt(s[0] ** 2 + s[1] ** 2)
+        s[0], s[1] = s[0] / s_norm, s[1] / s_norm
+
+        p_norm = sqrt(p[0] ** 2 + p[1] ** 2)
+        p[0], p[1] = p[0] / p_norm, p[1] / p_norm
 
         pw_r = Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
@@ -175,8 +146,11 @@ def plane_wave_2D(s, p, k0L):
         p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[1]
 
         # make unit vectors from s and p
-        s_norm = sqrt(s[0] ** 2 + s[1] ** 2); s_x, s_y = s[0] / s_norm, s[1] / s_norm;
-        p_norm = sqrt(p[0] ** 2 + p[1] ** 2); px, py = p[0] / p_norm, p[1] / p_norm
+        s_norm = sqrt(s[0] ** 2 + s[1] ** 2)
+        s_x, s_y = s[0] / s_norm, s[1] / s_norm
+
+        p_norm = sqrt(p[0] ** 2 + p[1] ** 2)
+        px, py = p[0] / p_norm, p[1] / p_norm
 
         pw_r = Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
@@ -189,7 +163,7 @@ def plane_wave_2D(s, p, k0L):
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
     return pw_r, pw_i
-#-------------------------------------------------------------------------------
+#-----------------------------------------------------------------------
 
 
 def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
@@ -256,18 +230,41 @@ def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
 
 
 
-def ff_anisotropic_2D(permittivity, k0L, e_r, e_i, m):
+def ff_anisotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n):
+    """Far Field calculator"""
 
-    step = 1 / float(m - 1)
+    # Input Variables:
+        # mesh_name: mesh keeping variable
+        # output_folder:
+        # permittivity: permittivity function
+        # k0L: dimensionless parameter describing wave vector length
+        # E_r: real part of scattered electric field
+        # E_i: imaginary part of scattered electric field
+        # FF_n: number of far field pattern sample points
 
-    phi = np.linspace(step / 2, 2 * 3.1415 - step / 2, num = m)
+    # Output Variables:
+        # phi: angle list from [0, 2pi]
+        # FF: far field value
 
-    rez1r = [0] * m;   rez2r = [0] * m; rez1i = [0] * m;    rez2i = [0] * m
-    a21 = [0] * m;   a22 = [0] * m;     a = [0] * m;
+    # Used Variables:
+        # step: step in phi discretization
+        # FF_r*: * component of real part of far field pattern
+        # FF_i*: * component of imaginary part of far field pattern
 
+    step = 1 / float(FF_n - 1)
+
+    phi = np.linspace(step / 2, 2 * 3.1415 - step / 2, num = FF_n)
+
+    FF_r1 = [0] * FF_n; FF_r2 = [0] * FF_n
+    FF_i1 = [0] * FF_n; FF_i2 = [0] * FF_n
+    FF = [0] * FF_n;
+
+    # Unit 2x2 matrix
     II = as_matrix(((1, 0), (0,1)))
+    # Unit vectors in i and j direction
+    e1 = as_vector([1, 0]);   e2 = as_vector([0, 1])
 
-    for n in range (0, m):
+    for n in range (0, FF_n):
 
         r = [np.cos(phi[n]), np.sin(phi[n])]
 
@@ -277,30 +274,61 @@ def ff_anisotropic_2D(permittivity, k0L, e_r, e_i, m):
         A1 = as_matrix(((1 - r[0] * r[0], r[0] * r[1]), (0, 0)))
         A2 = as_matrix(((0, 0), (r[0] * r[1], 1 - r[1] * r[1])))
 
-        e1 = as_vector([1, 0]);   e2 = as_vector([0, 1])
+        FF_r1[n] = (k0L * k0L) * assemble(dot((A1 * (permittivity - II)) * (E_r * fr + E_i * fi), e1) * dx) / (4 * 3.1415)
+        FF_r2[n] = (k0L * k0L) * assemble(dot((A2 * (permittivity - II)) * (E_r * fr + E_i * fi), e2) * dx) / (4 * 3.1415)
 
-        rez1r[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A1) * (e_r * fr + e_i * fi), e1) * dx) / (4 * 3.1415)
-        rez2r[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A2) * (e_r * fr + e_i * fi), e2) * dx) / (4 * 3.1415)
+        FF_i1[n] = (k0L * k0L) * assemble(dot((A1 * (permittivity - II)) * (E_i * fr - E_r * fi), e1) * dx) / (4 * 3.1415)
+        FF_i2[n] = (k0L * k0L) * assemble(dot((A2 * (permittivity - II)) * (E_i * fr - E_r * fi), e2) * dx) / (4 * 3.1415)
 
-        rez1i[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A1) * (e_i * fr - e_r * fi), e1) * dx) / (4 * 3.1415)
-        rez2i[n] = (k0L * k0L) * assemble(dot(((permittivity - II) * A2) * (e_i * fr - e_r * fi), e2) * dx) / (4 * 3.1415)
+        FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
 
+    ofile = open(output_folder + '/ff_' + mesh_name, 'w')
+    for m in range(0, FF_n):
+        ofile.write('%8.4e %8.4e\n' % (phi[m], FF[m]))
 
-        a21[n] = rez1r[n] * rez1r[n] + rez1i[n] * rez1i[n]
-        a22[n] = rez2r[n] * rez2r[n] + rez2i[n] * rez2i[n]
-
-        a[n] = np.sqrt(a21[n] + a22[n])
-
-    return phi, a
-
+    return phi, FF
+#-------------------------------------------------------------------------------
 
 
+def save_PVD(output_folder, output_name, u):
+    """Save function u and coresponding mesh to .pvd file format"""
+
+    # Input Variables:
+        # output_folder: folder where .h5 file will be store
+        # mesh_name: name of mesh containig .h5 file
+        # u: function that will be saved in 'output_folder/output_name.pvd'
+
+    vtkfile = File(output_folder + output_name + '.pvd')
+    vtkfile << u
+
+    return 0
+#-------------------------------------------------------------------------------
+
+
+def save_HDF5(output_folder, mesh, mesh_name, Field, u):
+    """Save function u and coresponding mesh to .h5 file format"""
+
+    # Input Variables:
+        # output_folder: folder where .h5 file will be store, format folder/
+        # mesh: mesh keeping variable
+        # mesh_name: name of .h5 file in which mesh is stored
+        # Field:
+        # u: function that will be saved in 'output_folder/Field_mesh_name.h5' file
+
+    hdf = HDF5File(mesh.mpi_comm(), output_folder + Field + '_' + mesh_name + '.h5', 'w')
+    hdf.write(mesh, output_folder + 'mesh')
+    hdf.write(u, output_folder + 'solution');
+    hdf.close()
+
+    return 0
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
 
 
 if __name__ == "__main__":
 
-    # Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
-    # ie. python3 anisotropic2D.py mesh anisotropic results 36
+    # Function call: python3 anisotropic2D.py mesh_folder mesh_name permittivity_file output_folder FF_n
+    # ie. python3 anisotropic2D.py mesh anisotropic effective results 72
 
     mesh_folder = sys.argv[1]
     mesh_name = sys.argv[2]
@@ -308,36 +336,29 @@ if __name__ == "__main__":
     output_folder = sys.argv[4]
     FF_n = int(sys.argv[5])
 
-    # Domain defining permittivity coefficients
-    patch_permittivity = 1
-    matrix_permittivity = 11.7
-    air = 1
-
+    air_permittivity = 1
     # Plane Wave excitation E = p exp(i * k0L * s.x)
-    s = [1, 2];    p = [-2, 1];  k0L = 3.141592653589793
-
+    s = [1, 2];    p = [-2, 1];  k0L = 3.141592
     pwr, pwi = plane_wave_2D(s, p, k0L)
 
     # Mesh function
-    mesh, markers, permittivity = mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permittivity, air)
+    mesh, markers, permittivity = mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file, air_permittivity)
 
     # Solver call
     E_r, E_i = solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L)
 
-    # P1 FE space
+    # P1 vector and scalar FE space
     V3 = VectorFunctionSpace(mesh, 'P', 1); V = FunctionSpace(mesh, 'P', 1)
 
     # Project solution from N1Curl to P1 FE space
     EP1_r = project(E_r, V3);  EP1_i = project(E_i, V3);
 
     # Output files in PVD (for ParaView) and HDF5 (for later processing) format
-    save_PVD(output_folder + '/PVD/', 'Er', EP1_r);
-    save_PVD(output_folder + '/PVD/', 'Ei', EP1_i)
-    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Er', EP1_r)
-    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Ei', EP1_i)
+    save_PVD(output_folder + '/PVD/', 'Er_' + mesh_name, EP1_r);
+    save_PVD(output_folder + '/PVD/', 'Ei_' + mesh_name, EP1_i)
+
+    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Er_' + mesh_name, EP1_r)
+    save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Ei_' + mesh_name, EP1_i)
 
     # Far field computation
-    phi, ff = ff_isotropic_2D(permittivity, k0L, EP1_r, EP1_i, FF_n)
-    ofile = open('ff_' + mesh_name, 'w')
-    for m in range(0, FF_n):
-        ofile.write('%8.4e %8.4e\n' % (phi[m], ff[m]))
+    phi, FF = ff_anisotropic_2D(mesh_name, output_folder, permittivity, k0L, EP1_r, EP1_i, FF_n)
