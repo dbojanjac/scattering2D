@@ -39,17 +39,6 @@ def mesh_anisotropic_2D(mesh_folder, mesh_name, permittivity_file, air_permittiv
 
         # permittivity: zeroth order polynomial, permittivity function
 
-    # Input Variables:
-        # mesh_folder: mesh in .h5 file format contaning folder
-        # mesh_name: name of the mesh containing file (in .h5 format), mesh subdomains
-                   # are stored in subdomains part of mesh_folder/mesh_name.h5 file
-                   # coefficient 3 represents inner_permittivity and 1 represents box of anisotropic material
-        # permittivity_file: 3 x 3 matrix of anisotropic permittivity stored in file permittivity_file
-    # Output Variables:
-        # mesh: mesh read from mesh_folder/Mesh_nNme.h5 file
-        # markers: physical subdomains defining function
-        # permittivity: domain permittivity
-
     # Read mesh and subdomain markers from mesh_folder/mesh_name
     #---------------------------------------------------------------------------
     mesh_folder = mesh_folder + '/'
