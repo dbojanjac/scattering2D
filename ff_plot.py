@@ -46,8 +46,8 @@ FF = 10 * (np.log10(FF) + FF_max)
 fig = plt.figure()
 ax = fig.add_subplot(111, projection = 'polar')
 ax.plot(phi, FF, label = file_name, c = 'b')
-plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
-           ncol=1, mode = "expand", borderaxespad=0.)
+plt.legend(bbox_to_anchor = (0., 1.02, 1., .102), loc = 3,
+           ncol = 1, mode = "expand", borderaxespad = 0.)
 ax.set_rmax(0);  ax.set_rmin(-10)
 ax.set_rticks([-10, -5, 0, 2])
 
