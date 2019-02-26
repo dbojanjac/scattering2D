@@ -344,4 +344,4 @@ if __name__ == "__main__":
     save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Ei_' + mesh_name, EP1_i)
 
     # Far field computation
-    phi, FF = ff_isotropic_2D(mesh_name, permittivity, k0L, EP1_r, EP1_i, FF_n)
+    phi, FF = ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, EP1_r, EP1_i, FF_n)
