@@ -1,5 +1,5 @@
-# FEM based solver for electromagnetic wave scattering in 2D on anisotropic or
-# heterogeneous isotropic material based on weak formulatio and FEM
+# FEM based solver for electromagnetic wave scattering in 2D on heterogeneous
+# isotropic material
 
     # Domain defining parameters (permittivity) and incoming plane wave
     # parameters such as frequency k0L,  polarization p and direction s
@@ -10,7 +10,7 @@
     #   s = [1, 2];    p = [-2, 1];  k0L = 3.141592653589793
 
 
-# Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
+# Function call: python3 isotropic2D.py input_folder mesh_name output_folder FF_n
 # ie. python3 isotropic2D.py mesh isotropic results 72
 
 # input = domain mesh with subdomain markers in .h5 format
@@ -23,13 +23,13 @@ import sys
 
 
 
-def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permittivity, air_permittivity):
+def mesh_isotropic_2D(input_folder, mesh_name, patch_permittivity, matrix_permittivity, air_permittivity):
     """Read mesh and subdomains, from .h5 mesh file, for heterogeneous isotropic domain"""
 
     # Input Variables:
-        # mesh_folder: mesh contaning folder
+        # input_folder: mesh contaning folder
         # mesh_name: name of the mesh file (in .h5 format), mesh subdomains are
-                   # stored in subdomains part of mesh_folder/mesh_name.h5 file
+                   # stored in subdomains part of input_folder/mesh_name.h5 file
                    # coefficients in elements:
                         #   1 represents outside material (air_permittivity)
                         #   2 represents material matrix (matrix_permittivity)
@@ -44,16 +44,16 @@ def mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permitt
 
         # permittivity: zeroth order polynomial, permittivity function
 
-    # Read mesh and subdomain markers from mesh_folder/mesh_name
+    # Read mesh and subdomain markers from input_folder/mesh_name
     #---------------------------------------------------------------------------
-    mesh_folder = mesh_folder + '/'
+    input_folder = input_folder + '/'
 
     mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), mesh_folder + mesh_name + '.h5', 'r')
+    hdf = HDF5File(mesh.mpi_comm(), input_folder + mesh_name + '.h5', 'r')
 
-    hdf.read(mesh, mesh_folder + "mesh", False)
+    hdf.read(mesh, input_folder + "mesh", False)
     markers = MeshFunction('int', mesh)
-    hdf.read(markers, mesh_folder + "subdomains")
+    hdf.read(markers, input_folder + "subdomains")
 
     #---------------------------------------------------------------------------
     # Permittivity coefficient for previously defined subdomains
@@ -306,11 +306,11 @@ def save_HDF5(output_folder, mesh, mesh_name, Field, u):
 
 if __name__ == "__main__":
 
-    # Function call: python3 isotropic2D.py mesh_folder mesh_name output_folder FF_n
+    # Function call: python3 isotropic2D.py input_folder mesh_name output_folder FF_n
     # ie. python3 isotropic2D.py mesh isotropic results 72
 
     # Input parameters
-    mesh_folder = sys.argv[1]
+    input_folder = sys.argv[1]
     mesh_name = sys.argv[2]
     output_folder = sys.argv[3]
     FF_n = int(sys.argv[4])
@@ -325,7 +325,7 @@ if __name__ == "__main__":
     pw_r, pw_i = plane_wave_2D(s, p, k0L)
 
     # Mesh function
-    mesh, markers, permittivity = mesh_isotropic_2D(mesh_folder, mesh_name, patch_permittivity, matrix_permittivity, air_permittivity)
+    mesh, markers, permittivity = mesh_isotropic_2D(input_folder, mesh_name, patch_permittivity, matrix_permittivity, air_permittivity)
 
     # Solver call (solutions are in N1curl space which is not suitable for storage)
     E_r, E_i = solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L)
