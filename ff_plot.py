@@ -13,6 +13,8 @@ import numpy as np
 import sys
 
 def file_len(fname):
+    '''File length calculator'''
+    
     with open(fname) as f:
         for i, l in enumerate(f):
             pass
