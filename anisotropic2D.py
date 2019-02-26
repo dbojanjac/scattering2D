@@ -131,8 +131,11 @@ def plane_wave_2D(s, p, k0L):
     else:
 
         # Subtract from polarization vector projection in the direction of the propagation
-        p[0] = p[0] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[0]
-        p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[1]
+        p[0] = p[0] - ((s[0] * p[0] + s[1] * p[1]) \
+            / (s[0] * s[0] + s[1] * s[1])) * s[0]
+
+        p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) \
+            / (s[0] * s[0] + s[1] * s[1])) * s[1]
 
         # make unit vectors from s and p
         s_norm = np.sqrt(s[0] ** 2 + s[1] ** 2)
@@ -184,11 +187,13 @@ def solver_anisotropic_2D(mesh, permittivity, pwr, pwi, k0L):
     v_r, v_i = df.TestFunctions(W)
     n = df.FacetNormal(mesh)
 
-    a_r = df.inner(df.curl(Es_r), df.curl(v_r)) * df.dx - k0L * k0L * df.inner(permittivity * Es_r, v_r) * df.dx + \
-        k0L * (df.inner(n, Es_i) * df.inner(n, v_r) - df.inner(Es_i, v_r)) * df.ds
+    a_r = df.inner(df.curl(Es_r), df.curl(v_r)) * df.dx \
+        - k0L * k0L * df.inner(permittivity * Es_r, v_r) * df.dx \
+        + k0L * (df.inner(n, Es_i) * df.inner(n, v_r) - df.inner(Es_i, v_r)) * df.ds
 
-    a_i = df.inner(df.curl(Es_i), df.curl(v_i)) * df.dx - k0L * k0L * df.inner(permittivity * Es_i, v_i) * df.dx - \
-        k0L * (df.inner(n, Es_r) * df.inner(n, v_i) - df.inner(Es_r, v_i)) * df.ds
+    a_i = df.inner(df.curl(Es_i), df.curl(v_i)) * df.dx \
+        - k0L * k0L * df.inner(permittivity * Es_i, v_i) * df.dx \
+        - k0L * (df.inner(n, Es_r) * df.inner(n, v_i) - df.inner(Es_r, v_i)) * df.ds
 
     L_r = - k0L * k0L * df.inner((II - permittivity) * pwr, v_r) * df.dx
     L_i = - k0L * k0L * df.inner((II - permittivity) * pwi, v_i) * df.dx
@@ -249,26 +254,42 @@ def ff_anisotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_
 
     # Unit 2x2 matrix
     II = df.as_matrix(((1, 0), (0,1)))
+
     # Unit vectors in i and j direction
     e1 = df.as_vector([1, 0]);   e2 = df.as_vector([0, 1])
 
     for n in range (0, FF_n):
 
+        # Sampled unit vector on the unit circle
         r = [np.cos(phi[n]), np.sin(phi[n])]
 
-        fr = df.Expression('cos(k0L * (rx * x[0] + ry * x[1]))', degree = 1, k0L = k0L, rx = r[0], ry = r[1])
-        fi = df.Expression('sin(k0L * (rx * x[0] + ry * x[1]))', degree = 1, k0L = k0L, rx = r[0], ry = r[1])
+        fr = df.Expression('cos(k0L * (rx * x[0] + ry * x[1]))', \
+            degree = 1, k0L = k0L, rx = r[0], ry = r[1])
+
+        fi = df.Expression('sin(k0L * (rx * x[0] + ry * x[1]))', \
+            degree = 1, k0L = k0L, rx = r[0], ry = r[1])
 
         A1 = df.as_matrix(((1 - r[0] * r[0], r[0] * r[1]), (0, 0)))
         A2 = df.as_matrix(((0, 0), (r[0] * r[1], 1 - r[1] * r[1])))
 
-        FF_r1[n] = (k0L * k0L) * df.assemble(df.dot((A1 * (permittivity - II)) * (E_r * fr + E_i * fi), e1) * df.dx) / (4 * 3.1415)
-        FF_r2[n] = (k0L * k0L) * df.assemble(df.dot((A2 * (permittivity - II)) * (E_r * fr + E_i * fi), e2) * df.dx) / (4 * 3.1415)
+        #-----------------------------------------------------------------------
+        # Calculating components of far field pattern (real and imaginary part)
+        #-----------------------------------------------------------------------
+        FF_r1[n] = (k0L * k0L) * df.assemble(df.dot((A1 * (permittivity - II)) \
+            * (E_r * fr + E_i * fi), e1) * df.dx) / (4 * 3.1415)
 
-        FF_i1[n] = (k0L * k0L) * df.assemble(df.dot((A1 * (permittivity - II)) * (E_i * fr - E_r * fi), e1) * df.dx) / (4 * 3.1415)
-        FF_i2[n] = (k0L * k0L) * df.assemble(df.dot((A2 * (permittivity - II)) * (E_i * fr - E_r * fi), e2) * df.dx) / (4 * 3.1415)
+        FF_r2[n] = (k0L * k0L) * df.assemble(df.dot((A2 * (permittivity - II)) \
+            * (E_r * fr + E_i * fi), e2) * df.dx) / (4 * 3.1415)
 
-        FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
+        FF_i1[n] = (k0L * k0L) * df.assemble(df.dot((A1 * (permittivity - II)) \
+            * (E_i * fr - E_r * fi), e1) * df.dx) / (4 * 3.1415)
+
+        FF_i2[n] = (k0L * k0L) * df.assemble(df.dot((A2 * (permittivity - II)) \
+            * (E_i * fr - E_r * fi), e2) * df.dx) / (4 * 3.1415)
+
+        FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] \
+            + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
+        #-----------------------------------------------------------------------
 
     # Write far field pattern to output_folder/ff_mesh_name file
     ofile = open(output_folder + '/ff_' + mesh_name, 'w')

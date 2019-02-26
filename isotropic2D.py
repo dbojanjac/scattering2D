@@ -120,8 +120,11 @@ def plane_wave_2D(s, p, k0L):
     else:
 
         # Subtract from polarization vector projection in the direction of the propagation
-        p[0] = p[0] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[0]
-        p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[1]
+        p[0] = p[0] - ((s[0] * p[0] + s[1] * p[1]) \
+            / (s[0] * s[0] + s[1] * s[1])) * s[0]
+
+        p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) \
+            / (s[0] * s[0] + s[1] * s[1])) * s[1]
 
         # make unit vectors from s and p
         s_norm = np.sqrt(s[0] ** 2 + s[1] ** 2)
@@ -264,8 +267,8 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
         FF_r1[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
             * df.dot(A1 * (E_r * fr + E_i * fi), e1) * df.dx) / (4 * 3.1415)
 
-        FF_r2[n] = (k0L * k0L) * df.assemble((permittivity - 1) * df.dot(A2 \
-            * (E_r * fr + E_i * fi), e2) * df.dx) / (4 * 3.1415)
+        FF_r2[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
+            * df.dot(A2 * (E_r * fr + E_i * fi), e2) * df.dx) / (4 * 3.1415)
 
         FF_i1[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
             * df.dot(A1 * (E_i * fr - E_r * fi), e1) * df.dx) / (4 * 3.1415)
