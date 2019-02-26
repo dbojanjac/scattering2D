@@ -11,7 +11,7 @@
 
 
 # Function call: python3 isotropic2D.py input_folder mesh_name output_folder FF_n
-# ie. python3 isotropic2D.py mesh isotropic results 72
+# ie. python3 isotropic2D.py mesh isotropic2D results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
@@ -257,7 +257,7 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
 
         FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
 
-    # Write far field pattern to ff_mesh_name file
+    # Write far field pattern to output_folder/ff_mesh_name file
     ofile = open(output_folder + '/ff_' + mesh_name, 'w')
     for m in range(0, FF_n):
         ofile.write('%8.4e %8.4e\n' % (phi[m], FF[m]))

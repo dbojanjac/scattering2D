@@ -7,7 +7,7 @@
     # 2x2 matrix
 
 # Function call: python3 anisotropic2D.py input_folder mesh_name permittivity_file output_folder FF_n
-# ie. python3 anisotropic2D.py mesh anisotropic effective results 72
+# ie. python3 anisotropic2D.py mesh anisotropic2D effective results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
@@ -270,6 +270,7 @@ def ff_anisotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_
 
         FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
 
+    # Write far field pattern to output_folder/ff_mesh_name file
     ofile = open(output_folder + '/ff_' + mesh_name, 'w')
     for m in range(0, FF_n):
         ofile.write('%8.4e %8.4e\n' % (phi[m], FF[m]))
