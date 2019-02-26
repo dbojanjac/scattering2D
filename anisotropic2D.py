@@ -7,7 +7,7 @@
     # 2x2 matrix
 
 # Function call: python3 anisotropic2D.py input_folder mesh_name permittivity_file output_folder FF_n
-# ie. python3 anisotropic2D.py mesh anisotropic2D effective results 72
+# ie. python3 anisotropic2D.py mesh anisotropic effective results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
