@@ -11,7 +11,7 @@
 
 
 # Function call: python3 isotropic2D.py input_folder mesh_name output_folder FF_n
-# ie. python3 isotropic2D.py mesh isotropic2D results 72
+# ie. python3 isotropic2D.py mesh isotropic results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
@@ -344,4 +344,4 @@ if __name__ == "__main__":
     save_HDF5(output_folder +'/XDMF/', mesh, mesh_name, 'Ei_' + mesh_name, EP1_i)
 
     # Far field computation
-    phi, FF = ff_isotropic_2D(mesh_name, permittivity, k0L, EP1_r, EP1_i, FF_n)
+    phi, FF = ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, EP1_r, EP1_i, FF_n)
