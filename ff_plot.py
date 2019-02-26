@@ -49,6 +49,6 @@ ax.plot(phi, FF, label = file_name, c = 'b')
 plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
            ncol=1, mode = "expand", borderaxespad=0.)
 ax.set_rmax(0);  ax.set_rmin(-10)
-ax.set_rticks([-10, -5, 0])
+ax.set_rticks([-10, -5, 0, 2])
 
 plt.show()
