@@ -11,13 +11,13 @@
 
 
 # Function call: python3 isotropic2D.py input_folder mesh_name output_folder FF_n
-# ie. python3 isotropic2D.py mesh isotropic2D results 72
+# ie. python3 isotropic2D.py mesh isotropic results 72
 
 # input = domain mesh with subdomain markers in .h5 format
 # output = real and imaginary part of total electric field and far field pattern
 
 # Using FEniCS 2017.2.0
-from dolfin import *
+import dolfin as df
 import numpy as np
 import sys
 
@@ -48,17 +48,17 @@ def mesh_isotropic_2D(input_folder, mesh_name, patch_permittivity, matrix_permit
     #---------------------------------------------------------------------------
     input_folder = input_folder + '/'
 
-    mesh = Mesh()
-    hdf = HDF5File(mesh.mpi_comm(), input_folder + mesh_name + '.h5', 'r')
+    mesh = df.Mesh()
+    hdf = df.HDF5File(mesh.mpi_comm(), input_folder + mesh_name + '.h5', 'r')
 
     hdf.read(mesh, input_folder + "mesh", False)
-    markers = MeshFunction('int', mesh)
+    markers = df.MeshFunction('int', mesh)
     hdf.read(markers, input_folder + "subdomains")
 
     #---------------------------------------------------------------------------
     # Permittivity coefficient for previously defined subdomains
     #---------------------------------------------------------------------------
-    class Coeff(Expression):
+    class Coeff(df.Expression):
 
         def __init__(self, mesh, **kwargs):
             self.markers = markers
@@ -75,7 +75,7 @@ def mesh_isotropic_2D(input_folder, mesh_name, patch_permittivity, matrix_permit
                 values[0] = air_permittivity
 
     # Interpolation to zeroth order polynomial
-    permittivity = Coeff(mesh, degree=0)
+    permittivity = Coeff(mesh, degree = 0)
 
 
     return mesh, markers, permittivity
@@ -99,18 +99,18 @@ def plane_wave_2D(s, p, k0L):
     if (s[0] * p[0] + s[1] * p[1]) <= 1E-8:
 
         # make unit vectors from s and p
-        s_norm = sqrt(s[0] ** 2 + s[1] ** 2)
+        s_norm = np.sqrt(s[0] ** 2 + s[1] ** 2)
         s[0], s[1] = s[0] / s_norm, s[1] / s_norm
 
-        p_norm = sqrt(p[0] ** 2 + p[1] ** 2)
+        p_norm = np.sqrt(p[0] ** 2 + p[1] ** 2)
         p[0], p[1] = p[0] / p_norm, p[1] / p_norm
 
-        pw_r = Expression(\
+        pw_r = df.Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * cos(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-        pw_i = Expression(\
+        pw_i = df.Expression(\
         ('px * sin(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
@@ -124,18 +124,18 @@ def plane_wave_2D(s, p, k0L):
         p[1] = p[1] - ((s[0] * p[0] + s[1] * p[1]) / (s[0] * s[0] + s[1] * s[1])) * s[1]
 
         # make unit vectors from s and p
-        s_norm = sqrt(s[0] ** 2 + s[1] ** 2)
+        s_norm = np.sqrt(s[0] ** 2 + s[1] ** 2)
         s_x, s_y = s[0] / s_norm, s[1] / s_norm
 
-        p_norm = sqrt(p[0] ** 2 + p[1] ** 2)
+        p_norm = np.sqrt(p[0] ** 2 + p[1] ** 2)
         px, py = p[0] / p_norm, p[1] / p_norm
 
-        pw_r = Expression(\
+        pw_r = df.Expression(\
         ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * cos(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
-        pw_i = Expression(\
+        pw_i = df.Expression(\
         ('px * sin(k0L * (s_x * x[0] + s_y * x[1]))', \
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
@@ -161,43 +161,48 @@ def solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L):
     #---------------------------------------------------------------------------
     # Finite Element function spaces (Nedelec N1curl space), mixed formulation
     #---------------------------------------------------------------------------
-    NED = FiniteElement('N1curl', mesh.ufl_cell(), 1)
-    V = FunctionSpace(mesh, 'N1curl', 1)
-    W = FunctionSpace(mesh, NED * NED)
+    NED = df.FiniteElement('N1curl', mesh.ufl_cell(), 1)
+    V = df.FunctionSpace(mesh, 'N1curl', 1)
+    W = df.FunctionSpace(mesh, NED * NED)
 
     #---------------------------------------------------------------------------
     # Weak formulation
     #---------------------------------------------------------------------------
-    Es_r, Es_i = TrialFunctions(W)
-    v_r, v_i = TestFunctions(W)
-    n = FacetNormal(mesh)
+    Es_r, Es_i = df.TrialFunctions(W)
+    v_r, v_i = df.TestFunctions(W)
+    n = df.FacetNormal(mesh)
 
-    a_r = inner(curl(Es_r), curl(v_r)) * dx - k0L * k0L * inner(permittivity * Es_r, v_r) * dx + \
-        k0L * (inner(n, Es_i) * inner(n, v_r) - inner(Es_i, v_r)) * ds
+    a_r = df.inner(df.curl(Es_r), df.curl(v_r)) * df.dx \
+        - k0L * k0L * df.inner(permittivity * Es_r, v_r) * df.dx \
+        + k0L * (df.inner(n, Es_i) * df.inner(n, v_r) - df.inner(Es_i, v_r)) * df.ds
 
-    a_i = inner(curl(Es_i), curl(v_i)) * dx - k0L * k0L * inner(permittivity * Es_i, v_i) * dx - \
-        k0L * (inner(n, Es_r) * inner(n, v_i) - inner(Es_r, v_i)) * ds
+    a_i = df.inner(df.curl(Es_i), df.curl(v_i)) * df.dx \
+        - k0L * k0L * df.inner(permittivity * Es_i, v_i) * df.dx \
+        - k0L * (df.inner(n, Es_r) * df.inner(n, v_i) - df.inner(Es_r, v_i)) * df.ds
 
-    L_r = - k0L * k0L * inner((1 - permittivity) * pw_r, v_r) * dx
-    L_i = - k0L * k0L * inner((1 - permittivity) * pw_i, v_i) * dx
+    L_r = - k0L * k0L * df.inner((1 - permittivity) * pw_r, v_r) * df.dx
+    L_i = - k0L * k0L * df.inner((1 - permittivity) * pw_i, v_i) * df.dx
 
     # Final variational form
     F = a_r + a_i - L_r - L_i
 
-    # Splitting the variational form into LHS and RHS
-    a, L = lhs(F), rhs(F)
+    # Splitting the variational F form into LHS and RHS
+    a, L = df.lhs(F), df.rhs(F)
 
     # Solution Function
-    es = Function(W); Es = es.vector()
+    es = df.Function(W); Es = es.vector()
 
-    # Assemble RHS, LHS and solve the system
-    A = assemble(a);    b = assemble(L);    solve(A, Es, b)
+    # Assemble RHS and LHS
+    A = df.assemble(a);    b = df.assemble(L);
+
+    # Solve the system using FEniCS implemented solver
+    df.solve(A, Es, b)
 
     # Split Solution into real and imaginary part
     Es_r, Es_i = es.split()
 
     # Interpolate incoming plane wave into N1Curl Function Space
-    EI_r = interpolate(pw_r, V); EI_i = interpolate(pw_i, V)
+    EI_r = df.interpolate(pw_r, V); EI_i = df.interpolate(pw_i, V)
 
     # Total Field = Incident Field + Scattered Field
     E_r = Es_r + EI_r;  E_i = Es_i + EI_i
@@ -219,8 +224,8 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
         # FF_n: number of far field pattern sample points
 
     # Output Variables:
-        # phi: angle list from [0, 2pi]
-        # FF: far field value
+        # phi: angle list from [0, 2pi] into FF_n points
+        # FF: far field value in phi(n) position (FF_n points)
 
     # Used Variables:
         # step: step in phi discretization
@@ -236,26 +241,41 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
     FF = [0] * FF_n;
 
     # Unit vectors in i and j direction
-    e1 = as_vector([1, 0]);   e2 = as_vector([0, 1])
+    e1 = df.as_vector([1, 0]);   e2 = df.as_vector([0, 1])
 
     for n in range (0, FF_n):
 
-        # Sampled unit vector on unit circle
+        # Sampled unit vector on the unit circle
         r = [np.cos(phi[n]), np.sin(phi[n])]
 
-        fr = Expression('cos(k0L * (rx * x[0] + ry * x[1]))', degree = 1, k0L = k0L, rx = r[0], ry = r[1])
-        fi = Expression('sin(k0L * (rx * x[0] + ry * x[1]))', degree = 1, k0L = k0L, rx = r[0], ry = r[1])
+        fr = df.Expression('cos(k0L * (rx * x[0] + ry * x[1]))', \
+            degree = 1, k0L = k0L, rx = r[0], ry = r[1])
 
-        A1 = as_matrix(((1 - r[0] * r[0], r[0] * r[1]), (0, 0)))
-        A2 = as_matrix(((0, 0), (r[0] * r[1], 1 - r[1] * r[1])))
+        fi = df.Expression('sin(k0L * (rx * x[0] + ry * x[1]))', \
+            degree = 1, k0L = k0L, rx = r[0], ry = r[1])
 
-        FF_r1[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A1 * (E_r * fr + E_i * fi), e1) * dx) / (4 * 3.1415)
-        FF_r2[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A2 * (E_r * fr + E_i * fi), e2) * dx) / (4 * 3.1415)
+        # u nit matrix - permittivity_matrx
+        A1 = df.as_matrix(((1 - r[0] * r[0], r[0] * r[1]), (0, 0)))
+        A2 = df.as_matrix(((0, 0), (r[0] * r[1], 1 - r[1] * r[1])))
 
-        FF_i1[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A1 * (E_i * fr - E_r * fi), e1) * dx) / (4 * 3.1415)
-        FF_i2[n] = (k0L * k0L) * assemble((permittivity - 1) * dot(A2 * (E_i * fr - E_r * fi), e2) * dx) / (4 * 3.1415)
+        #-----------------------------------------------------------------------
+        # Calculating components of far field pattern (real and imaginary part)
+        #-----------------------------------------------------------------------
+        FF_r1[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
+            * df.dot(A1 * (E_r * fr + E_i * fi), e1) * df.dx) / (4 * 3.1415)
 
-        FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
+        FF_r2[n] = (k0L * k0L) * df.assemble((permittivity - 1) * df.dot(A2 \
+            * (E_r * fr + E_i * fi), e2) * df.dx) / (4 * 3.1415)
+
+        FF_i1[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
+            * df.dot(A1 * (E_i * fr - E_r * fi), e1) * df.dx) / (4 * 3.1415)
+
+        FF_i2[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
+            * df.dot(A2 * (E_i * fr - E_r * fi), e2) * df.dx) / (4 * 3.1415)
+
+        FF[n] = np.sqrt(FF_r1[n] * FF_r1[n] + FF_i1[n] * FF_i1[n] \
+            + FF_r2[n] * FF_r2[n] + FF_i2[n] * FF_i2[n])
+        #-----------------------------------------------------------------------
 
     # Write far field pattern to output_folder/ff_mesh_name file
     ofile = open(output_folder + '/ff_' + mesh_name, 'w')
@@ -275,7 +295,7 @@ def save_PVD(output_folder, output_name, u):
         # mesh_name: name of mesh containig .h5 file
         # u: function that will be saved in 'output_folder/output_name.pvd'
 
-    vtkfile = File(output_folder + output_name + '.pvd')
+    vtkfile = df.File(output_folder + output_name + '.pvd')
     vtkfile << u
 
     return 0
@@ -292,7 +312,7 @@ def save_HDF5(output_folder, mesh, mesh_name, Field, u):
         # Field:
         # u: function that will be saved in 'output_folder/Field_mesh_name.h5' file
 
-    hdf = HDF5File(mesh.mpi_comm(), output_folder + Field + '_' + mesh_name + '.h5', 'w')
+    hdf = df.HDF5File(mesh.mpi_comm(), output_folder + Field + '_' + mesh_name + '.h5', 'w')
     hdf.write(mesh, output_folder + 'mesh')
     hdf.write(u, output_folder + 'solution');
     hdf.close()
@@ -331,10 +351,10 @@ if __name__ == "__main__":
     E_r, E_i = solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L)
 
     # P1 vector and scalar FE space
-    V3 = VectorFunctionSpace(mesh, 'P', 1); V = FunctionSpace(mesh, 'P', 1)
+    V3 = df.VectorFunctionSpace(mesh, 'P', 1); V = df.FunctionSpace(mesh, 'P', 1)
 
     # Project solution from N1Curl to P1 FE space
-    EP1_r = project(E_r, V3);  EP1_i = project(E_i, V3);
+    EP1_r = df.project(E_r, V3);  EP1_i = df.project(E_i, V3);
 
     # Output files in PVD (for ParaView) and HDF5 (for later processing) format
     save_PVD(output_folder + '/PVD/', 'Er_' + mesh_name, EP1_r);
