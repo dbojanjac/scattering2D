@@ -3,13 +3,25 @@
 # Function call: python3 pplot.py folder_name far_field_file FF_n
 # ie. python3 pplot.py results ff_isotropic 72
 
+# Input variables
+        # folder_name: folder containing far field file
+        # file_name: far field pattern file vontainig two columns  in format
+        #               (angle far_field amplitude)
+        #
+
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
+def file_len(fname):
+    with open(fname) as f:
+        for i, l in enumerate(f):
+            pass
+    return i + 1
+
 folder_name = sys.argv[1]
 file_name = sys.argv[2]
-FF_n = int(sys.argv[3])
+FF_n = file_len(folder_name + '/' + file_name)
 
 ifile = open(folder_name + '/' + file_name, 'r')
 
