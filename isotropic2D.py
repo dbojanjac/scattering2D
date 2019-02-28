@@ -94,8 +94,9 @@ def plane_wave_2D(s, p, k0L):
         # pw_r: real part of incoming plane wave
         # pw_i: imaginary part of incoming plane wave
 
-
+    #---------------------------------------------------------------------------
     # Check if polarization is orthogonal to direction of propagation
+    #---------------------------------------------------------------------------
     if (s[0] * p[0] + s[1] * p[1]) <= 1E-8:
 
         # make unit vectors from s and p
@@ -115,8 +116,10 @@ def plane_wave_2D(s, p, k0L):
         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'), \
         degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
 
+    #---------------------------------------------------------------------------
     # Make it orthogonal by ignoring electric field component in the
     # direction of propagation
+    #---------------------------------------------------------------------------
     else:
 
         # Subtract from polarization vector projection in the direction of the propagation
@@ -169,7 +172,7 @@ def solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L):
     W = df.FunctionSpace(mesh, NED * NED)
 
     #---------------------------------------------------------------------------
-    # Weak formulation
+    # Weak formulation (electromagnetic problem is formulated as mixed problem)
     #---------------------------------------------------------------------------
     Es_r, Es_i = df.TrialFunctions(W)
     v_r, v_i = df.TestFunctions(W)
@@ -192,15 +195,22 @@ def solver_isotropic_2D(mesh, permittivity, pw_r, pw_i, k0L):
     # Splitting the variational F form into LHS and RHS
     a, L = df.lhs(F), df.rhs(F)
 
+    #---------------------------------------------------------------------------
+    # Assembling the system (unknown is a vector containing real and imaginary
+    # part as two unknown fields, mixed problem)
+    #---------------------------------------------------------------------------
     # Solution Function
     es = df.Function(W); Es = es.vector()
 
     # Assemble RHS and LHS
     A = df.assemble(a);    b = df.assemble(L);
 
-    # Solve the system using FEniCS implemented solver
+    # Solve the system using FEniCS implemented direct solver
     df.solve(A, Es, b)
 
+    #---------------------------------------------------------------------------
+    # Solution field is equal to sum of incoming and scattered wave
+    #---------------------------------------------------------------------------
     # Split Solution into real and imaginary part
     Es_r, Es_i = es.split()
 
@@ -263,6 +273,8 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
 
         #-----------------------------------------------------------------------
         # Calculating components of far field pattern (real and imaginary part)
+        # according to Mischenko: Electromagnetic scattering by Particles and
+        # Particle Groups. Cambridge University Press
         #-----------------------------------------------------------------------
         FF_r1[n] = (k0L * k0L) * df.assemble((permittivity - 1) \
             * df.dot(A1 * (E_r * fr + E_i * fi), e1) * df.dx) / (4 * 3.1415)
@@ -284,7 +296,6 @@ def ff_isotropic_2D(mesh_name, output_folder, permittivity, k0L, E_r, E_i, FF_n)
     ofile = open(output_folder + '/ff_' + mesh_name, 'w')
     for m in range(0, FF_n):
         ofile.write('%8.4e %8.4e\n' % (phi[m], FF[m]))
-
 
     return phi, FF
 #-------------------------------------------------------------------------------
