@@ -73,7 +73,6 @@ class Scattering(ABC):
     get_far_field() will generate far_field array and return it or save it to
     file if user passed output_file.'''
     def __init__(self, mesh_filename, permittivity_dict, output_dir=None):
-        print(permittivity_dict)
         self.permittivity_dict = permittivity_dict
 
         self.mesh, self.mesh_markers = self.__convert_mesh(mesh_filename)

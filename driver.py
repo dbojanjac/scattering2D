@@ -44,8 +44,8 @@ if __name__ == "__main__":
 
     parser.add_argument("-o", "--output", help="Folder for outputing results")
     parser.add_argument("-e", "--eps-tensor", help="Epsilon tensor filename.")
-    parser.add_argument("-n", "--far-field-num", help="Number of dots to \
-            evaluate far field", dest="FF_n", type=int)
+    parser.add_argument("-n", "--far-field-num", help="Number of dots to " +
+            "evaluate far field", dest="FF_n", type=int)
     # don't use -m because that is reserved and there is no bash autocomplete
     parser.add_argument("--mesh", help="Mesh filename")
 
@@ -57,6 +57,9 @@ if __name__ == "__main__":
     s = [0, 1]
     p = [1, 0]
     k0L = np.pi
+
+    if not args.permittivity:
+        args.permittivity = [1, 11.7, 1]
 
     if not args.FF_n:
         args.FF_n = 10
