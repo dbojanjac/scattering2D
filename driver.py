@@ -1,7 +1,9 @@
 from scattering import IsotropicScattering, AnisotropicScattering, plane_wave
+from scattering import plot_far_field
 import dolfin as df
 import numpy as np
 import argparse
+import os
 
 def log_args(args, subdomains):
     if args.eps_tensor:
@@ -47,7 +49,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--far-field-num", help="Number of dots to " +
             "evaluate far field", dest="FF_n", type=int)
     # don't use -m because that is reserved and there is no bash autocomplete
-    parser.add_argument("--mesh", help="Mesh filename")
+    parser.add_argument("--mesh", help="Mesh filename", required=True)
 
     args, petsc_args = parser.parse_known_args()
 
@@ -57,9 +59,6 @@ if __name__ == "__main__":
     s = [0, 1]
     p = [1, 0]
     k0L = np.pi
-
-    if not args.permittivity:
-        args.permittivity = [1, 11.7, 1]
 
     if not args.FF_n:
         args.FF_n = 10
@@ -81,21 +80,16 @@ if __name__ == "__main__":
 
         log_args(args, subdomains)
         scattering = AnisotropicScattering(args.mesh, subdomains)
-        pw_r, pw_i = plane_wave(s, p, k0L)
-        E_r, E_i = scattering.solve(pw_r, pw_i, k0L)
-
-        log_solutions(E_r, E_i, scattering.mesh, args.eps_tensor)
-        scattering.get_far_field(args.FF_n, k0L, E_r, E_i, output_file=args.output)
     else:
         subdomains = {i: args.permittivity[i-1]
                 for i in range(1, len(args.permittivity)+1)}
 
         log_args(args, subdomains)
         scattering = IsotropicScattering(args.mesh, subdomains)
-        pw_r, pw_i = plane_wave(s, p, k0L)
-        E_r, E_i = scattering.solve(pw_r, pw_i, k0L)
-        log_solutions(E_r, E_i, scattering.mesh, args.eps_tensor)
+    pw_r, pw_i = plane_wave(s, p, k0L)
+    E_r, E_i = scattering.solve(pw_r, pw_i, k0L)
+    log_solutions(E_r, E_i, scattering.mesh, args.eps_tensor)
 
-        scattering.get_far_field(args.FF_n, k0L, E_r, E_i, output_file=args.output)
+    phi, FF = scattering.get_far_field(args.FF_n, k0L, E_r, E_i, output_file=args.output)
 
-
+    plot_far_field(phi, FF, os.path.splitext(os.path.basename(args.mesh))[0])
