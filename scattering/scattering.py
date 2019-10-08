@@ -209,20 +209,24 @@ class Scattering(ABC):
         # Unit vectors in i and j direction
         e1 = df.as_vector([1, 0]);   e2 = df.as_vector([0, 1])
 
-        # precompute this variables
-        rx = np.cos(phi)
-        ry = np.sin(phi)
+        cos_values = np.cos(phi)
+        sin_values = np.sin(phi)
+        rx = df.Constant(1.0)
+        ry = df.Constant(0.0)
 
         for n in range (0, FF_n):
+            rx.assign(cos_values[n])
+            ry.assign(sin_values[n])
+
             fr = df.Expression('cos(k0L * (rx * x[0] + ry * x[1]))', \
-                degree = 1, k0L = k0L, rx = rx[n], ry = ry[n])
+                degree = 1, k0L = k0L, rx = rx, ry = ry)
 
             fi = df.Expression('sin(k0L * (rx * x[0] + ry * x[1]))', \
-                degree = 1, k0L = k0L, rx = rx[n], ry = ry[n])
+                degree = 1, k0L = k0L, rx = rx, ry = ry)
 
             # unit matrix - permittivity_matrx
-            A1 = df.as_matrix(((1 - rx[n] * rx[n], rx[n] * ry[n]), (0, 0)))
-            A2 = df.as_matrix(((0, 0), (rx[n] * ry[n], 1 - ry[n] * ry[n])))
+            A1 = df.Constant([[1 - rx * rx, rx * ry], [0, 0]])
+            A2 = df.Constant([[0, 0], [rx * ry, 1 - ry * ry]])
 
             #TODO: compile list of subdomains where permittivity is not eq 1
             FF[n] = self._get_ff_component(k0L, A1, A2, E_r, fr, E_i, fi, e1, e2)
