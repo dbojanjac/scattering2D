@@ -19,4 +19,5 @@ pw = PlaneWave(s, p)
 
 E = problem.solve(pw)
 
-save_field(E, "test_anisotropic.pvd")
+phi, FF = problem.get_far_field(E, 40)
+plot_far_field(phi, FF, "anisotropic")

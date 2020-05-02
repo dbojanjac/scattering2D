@@ -11,7 +11,3 @@ class IsotropicScattering(Scattering):
         for (subdomain_id, epsilon) in permittivity_dict.items():
             self.permittivity.interpolate(fd.Constant(epsilon),
                                           self.mesh.measure_set("cell", subdomain_id))
-
-
-    def _get_ff_component(self, A1, A2, E, f, e1, e2):
-        return 1

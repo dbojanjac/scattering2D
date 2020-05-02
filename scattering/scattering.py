@@ -1,6 +1,5 @@
 import firedrake as fd
 import numpy as np
-import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 
 def save_field(field, name):
@@ -8,6 +7,8 @@ def save_field(field, name):
     outfile.write(field)
 
 def plot_far_field(phi, FF, filename):
+    import matplotlib.pyplot as plt
+
     # Put maximum at 0dB
     FF_max = abs(max(np.log10(FF)))
     FF = 10 * (np.log10(FF) + FF_max)
@@ -61,55 +62,47 @@ class Scattering(ABC):
 
         return E
 
-    @abstractmethod
-    def _get_ff_component(self, k0L, A1, A2, E_r, fr, E_i, fi, e1, e2):
-        #----------------------------------------------------------------------
-        # Calculating components of far field pattern (real and imaginary part)
-        # according to Mischenko: Electromagnetic scattering by Particles and
-        # Particle Groups. Cambridge University Press
-        #
-        # We will split implementation for scalar and tensor values. Scalar
-        # implementation can be found in scattering/isotropic_scattering.py
-        # and tensor implementation can be found in
-        # scattering/anisotropic_scattering.py
-        #----------------------------------------------------------------------
-        pass
 
-
-    def get_far_field(self, FF_n, E):
+    def get_far_field(self, E, FF_n):
         phi = np.linspace(0, 2 * np.pi, num = FF_n, endpoint = False)
-        FF = np.zeros(FF_n)
+        FF = np.zeros((FF_n, 2), dtype=np.complex128)
 
         # Unit vectors in i and j direction
-        # TODO: extract vectors from mesh and make this 3D code
-        # e = np.split(np.identity(self.mesh.dim), self.mesh.dim)
-        e1 = df.as_vector([1, 0]);   e2 = df.as_vector([0, 1])
+        e1 = fd.as_vector([1, 0])
+        e2 = fd.as_vector([0, 1])
 
         cos_values = np.cos(phi)
         sin_values = np.sin(phi)
 
         V = fd.VectorFunctionSpace(self.mesh, "CG", 1)
+        v = fd.TestFunction(V)
         x = fd.SpatialCoordinate(self.mesh)
+        k = self.k0L
+        epsilon = self.permittivity
 
-        for n in range (0, FF_n):
+        r = fd.Constant([1, 0])
+
+        for n in range(FF_n):
             rx = cos_values[n]
-            ry = cos_values[n]
+            ry = sin_values[n]
 
-            r = fd.as_vector([rx, ry])
+            r.assign([rx, ry])
 
-            f = fd.interpolate(fd.exp(1j * self.k0L * fd.dot(r, x)), V)
+            f = fd.exp(1j * self.k0L * fd.dot(r, x))
 
-            # unit matrix - permittivity_matrx
-            A1 = df.Constant([[1 - rx * rx, rx * ry], [0, 0]])
-            A2 = df.Constant([[0, 0], [rx * ry, 1 - ry * ry]])
+            #TODO: Constant and assign?
+            A = fd.as_matrix([[1 - rx**2, rx * ry],
+                             [rx * ry, 1 - ry**2]])
 
-            #TODO: compile list of subdomains where permittivity is not eq 1
-            FF[n] = self._get_ff_component(A1, A2, E, f, e1, e2)
-        FF = np.sqrt(FF)
+            ff_form = fd.inner(A * (epsilon - self.II) * E * f, v)  * fd.dx
+            ff_components = fd.assemble(ff_form)
 
-        if output_file:
-            with open(output_file, "w+") as f:
-                for angle, ff in zip(phi, FF):
-                    f.write("{} {}\n".format(angle, ff))
+            # here we have [real_0 + imag_0, ..., real_d + imag_d]
+            ff_components = np.sum(ff_components.dat.data_ro, axis=0)
+            print ("[DEBUG] ", ff_components)
 
-        return phi, FF
+            # just multiply complex values and get complex values
+            FF[n] = k**2 * ff_components / (4 * np.pi)
+        # first we sum all components together. After sum we have one complex
+        # number and then we compute magnitude. We return real array
+        return phi, np.absolute(np.sum(FF, axis = 1))
