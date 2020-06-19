@@ -29,6 +29,5 @@ def build_gradient(V, P1):
         vvals = list(map(Psec.getOffset, vlist))
         G.setValuesLocal(e, vvals, [-1, 1])
     G.assemble()
-    G.view()
 
     return G

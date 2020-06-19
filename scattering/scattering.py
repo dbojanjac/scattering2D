@@ -1,6 +1,9 @@
 import firedrake as fd
+from petsc4py import PETSc
 import numpy as np
 from abc import ABC, abstractmethod
+
+from .discrete_gradient import build_gradient
 
 def save_field(field, name):
     outfile = fd.File(name)
@@ -31,12 +34,77 @@ class Scattering(ABC):
         self.output_dir = output_dir
         self.k0L = k0L
 
+    # smoother for geometric multigrid
+    def hybrid_smoother(self, A, b, G):
+        GAMMA = 1
 
-    def solve(self, incident):
+        # generate vectors that are needed for algorithm
+        with b.dat.vec_ro as b_vec:
+            rhs_vec = b_vec.copy()
+            r_vec = b_vec.copy()
+            g_vec = b_vec.copy()
+
+        # A_phi_mat = G^T * A * G
+        A_phi = G.transposeMatMult(A)               # G^T * A
+        A_phi = A_phi.matMult(G)                    # G^T * A * G
+
+        g_phi_vec = A_phi.getVecLeft()
+        rhs_phi_vec = g_phi_vec.copy()
+        iteration = 0
+        while True:
+            A.mult(g_vec, rhs_vec)                  # rhs = A * g
+            r_vec = b_vec - rhs_vec                 # r = b - A * g
+            norm = r_vec.norm()
+
+            print (norm)
+            iteration += 1
+
+            #TODO: we can remove and have g = G * g_phi
+            g_vec.set(0)                            # g     <= 0
+            #TODO: add ZERO_INITIAL_GUESS and remove
+            g_phi_vec.set(0)                        # g_phi <= 0
+
+            # forward Gauss-Seidel
+            G.multTranspose(r_vec, rhs_phi_vec)         # rhs_phi = G^T * r
+
+            # A_phi * g_phi = G^T * r
+            sortype_flags = PETSc.Mat.SORType.FORWARD_SWEEP
+            A_phi.SOR(rhs_phi_vec, g_phi_vec, sortype=sortype_flags, its=GAMMA)
+
+            # g <= g + G * g_phi
+            G.mult(g_phi_vec, rhs_vec)              # rhs = G * g_phi
+
+            g_vec += rhs_vec                        # g  <= g + G *
+
+            # symmetric Gauss-Seidel
+            # A * g = r
+            sortype_flags = PETSc.Mat.SORType.SYMMETRY_SWEEP
+            A.SOR(r_vec, g_vec, sortype=sortype_flags, its=GAMMA)
+
+            # backward Gauss-Seidel
+            A.mult(g_vec, rhs_vec)                      # rhs   = A * g
+            r_vec -= rhs_vec                            # r = r - A * g
+            G.multTranspose(r_vec, rhs_phi_vec)         # rhs = G^T * g_phi
+
+            #TODO: add ZERO_INITIAL_GUESS and remove
+            g_phi_vec.set(0)                        # g_phi = 0
+
+            # A_phi * g_phi = rhs
+            sortype_flags = PETSc.Mat.SORType.BACKWARD_SWEEP
+            A_phi.SOR(rhs_phi_vec, g_phi_vec, sortype=sortype_flags, its=GAMMA)
+
+            G.mult(g_phi_vec, rhs_vec)              # rhs = G * g_phi
+            g_vec += rhs_vec                        # g = g + rhs
+
+        return g
+
+
+    def solve(self, incident, method="lu"):
         Ei = incident.interpolate(self.mesh, self.k0L)
         mesh = Ei.ufl_domain()
-        V = fd.FunctionSpace(mesh, 'N1curl', 1)
 
+        V = fd.FunctionSpace(mesh, 'N1curl', 1)
+        Es = fd.Function(V)
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
         n = fd.FacetNormal(mesh)
@@ -50,13 +118,24 @@ class Scattering(ABC):
             - ik * ((fd.dot(u, n) * fd.inner(n, v)) - fd.inner(u, v)) * fd.ds)
         L = - k**2 * fd.inner((self.II - epsilon) * Ei, v) * fd.dx
 
-        Es = fd.Function(V)
-        solver_params = {
-                "ksp_type": "preonly",
-                "pc_type": "lu",
-                "ksp_view": ""
+        solvers = {
+                "lu": {
+                    "ksp_type": "preonly",
+                    "pc_type": "lu",
+                    "pc_factor_mat_solver_type": "mumps",
+                    "mat_mumps_icntl_4": "2"},
+                "ilu": {
+                    "pc_type": "ilu",
+                    "ksp_type": "gmres",
+                    "ksp_rtol": "1e-8",
+                    "pc_factor_levels": 2}
         }
-        fd.solve(a == L, Es, solver_parameters=solver_params)
+
+        A = fd.assemble(a)
+        b = fd.assemble(L)
+
+        solver = fd.LinearSolver(A, solver_parameters=solvers[method])
+        solver.solve(Es, b)
 
         E = fd.project(Es + Ei, V)
 
@@ -81,6 +160,7 @@ class Scattering(ABC):
         epsilon = self.permittivity
 
         r = fd.Constant([1, 0])
+        A = fd.Constant([[0, 0], [0, 0]])
 
         for n in range(FF_n):
             rx = cos_values[n]
@@ -90,10 +170,10 @@ class Scattering(ABC):
 
             f = fd.exp(1j * self.k0L * fd.dot(r, x))
 
-            #TODO: Constant and assign?
-            A = fd.as_matrix([[1 - rx**2, rx * ry],
-                             [rx * ry, 1 - ry**2]])
+            A.assign([[1 - rx**2, rx * ry],
+                      [rx * ry, 1 - ry**2]])
 
+            #TODO: don't integrate if integral is zero
             ff_form = fd.inner(A * (epsilon - self.II) * E * f, v)  * fd.dx
             ff_components = fd.assemble(ff_form)
 
