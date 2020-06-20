@@ -5,6 +5,9 @@ from abc import ABC, abstractmethod
 
 from .discrete_gradient import build_gradient
 
+def errornorm(uh, v):
+    return fd.errornorm(uh, v)
+
 def save_field(field, name):
     outfile = fd.File(name)
     outfile.write(field)
@@ -123,7 +126,7 @@ class Scattering(ABC):
                     "ksp_type": "preonly",
                     "pc_type": "lu",
                     "pc_factor_mat_solver_type": "mumps",
-                    "mat_mumps_icntl_4": "2"},
+                    "mat_mumps_icntl_4": "1"},
                 "ilu": {
                     "pc_type": "ilu",
                     "ksp_type": "gmres",
