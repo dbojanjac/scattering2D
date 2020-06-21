@@ -32,8 +32,13 @@ def plot_far_field(phi, FF, filename):
 
 
 class Scattering(ABC):
-    def __init__(self, mesh_filename, k0L, output_dir="output"):
-        self.mesh = fd.Mesh(mesh_filename)
+    def __init__(self, mesh, k0L, output_dir="output"):
+        if isinstance(mesh, str):
+            self.mesh = fd.Mesh(mesh)
+        elif isinstance(mesh, fd.firedrake.mesh.MeshGeometry):
+            self.mesh = mesh
+        else:
+            raise ValueError("Mesh object unknown")
         self.output_dir = output_dir
         self.k0L = k0L
 

@@ -3,8 +3,8 @@ import firedrake as fd
 from .scattering import Scattering
 
 class AnisotropicScattering(Scattering):
-    def __init__(self, mesh_filename, permittivity_dict, k0L, **kvargs):
-        super().__init__(mesh_filename, k0L, **kvargs)
+    def __init__(self, mesh, permittivity_dict, k0L, **kvargs):
+        super().__init__(mesh, k0L, **kvargs)
         self.II = fd.as_matrix(((1, 0), (0,1)))
         self.permittivity = fd.Function(fd.TensorFunctionSpace(self.mesh, "DG", 0))
 
