@@ -187,7 +187,6 @@ class Scattering(ABC):
 
             # here we have [real_0 + imag_0, ..., real_d + imag_d]
             ff_components = np.sum(ff_components.dat.data_ro, axis=0)
-            print ("[DEBUG] ", ff_components)
 
             # just multiply complex values and get complex values
             FF[n] = k**2 * ff_components / (4 * np.pi)
