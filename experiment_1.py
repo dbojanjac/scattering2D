@@ -4,18 +4,22 @@ from subprocess import run, DEVNULL
 from scattering import *
 
 FAR_FIELD_POINTS = 40
+LC1 = 2e-2
+LC2 = 2e-2
+NUM_EXPERIMENTS = 20
 
 def run_command(args):
     print("Running command: {}".format(" ".join(args)))
     run(args, stdout=DEVNULL, check=True)
 
-with open("results.csv", "w", newline='') as csvfile:
+with open("results1.csv", "w", newline='') as csvfile:
     results = [("Number of elements in cell", "E_field_norm", "FF norm")]
     result_writer = csv.writer(csvfile, delimiter=',')
-    for i in range(1, 15):
+    for i in range(1, NUM_EXPERIMENTS):
         mesh_file = "mesh/hexa.msh"
 
         run_command(["gmsh", "-2", "-o", mesh_file, "-setnumber", "n", str(i),
+                     "-setnumber", "lc1", LC1, "-setnumber", "lc2", LC2,
                      "mesh/hexa.geo"])
 
         permittivity_dict = {1: 1, 2: 11.7, 3: 1}
@@ -34,7 +38,7 @@ with open("results.csv", "w", newline='') as csvfile:
         epsilon = [[5.41474, 0], [0, 5.71539]]
 
         permittivity_dict = {1: epsilon, 2: epsilon, 3: np.identity(2)}
-        print("Anisotropic Scatteirng with permittivity {} and n {}".format(permittivity_dict, i))
+        print("Anisotropic Scattering with permittivity {} and n {}".format(permittivity_dict, i))
         problem = AnisotropicScattering(problem.mesh, permittivity_dict, k0L)
         E_anisotropic = problem.solve(pw)
 
