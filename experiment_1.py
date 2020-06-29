@@ -3,9 +3,9 @@ import csv
 from subprocess import run, DEVNULL
 from scattering import *
 
-FAR_FIELD_POINTS = 40
-LC1 = 2e-2
-LC2 = 2e-2
+FAR_FIELD_POINTS = 120
+LC1 = 5e-3
+LC2 = 5e-3
 NUM_EXPERIMENTS = 20
 
 def run_command(args):
@@ -19,7 +19,7 @@ with open("results1.csv", "w", newline='') as csvfile:
         mesh_file = "mesh/hexa.msh"
 
         run_command(["gmsh", "-2", "-o", mesh_file, "-setnumber", "n", str(i),
-                     "-setnumber", "lc1", LC1, "-setnumber", "lc2", LC2,
+                     "-setnumber", "lc1", str(LC1), "-setnumber", "lc2", str(LC2),
                      "mesh/hexa.geo"])
 
         permittivity_dict = {1: 1, 2: 11.7, 3: 1}
@@ -34,8 +34,9 @@ with open("results1.csv", "w", newline='') as csvfile:
         E_isotropic = problem.solve(pw)
 
         phi, FF_isotropic = problem.get_far_field(E_isotropic, FAR_FIELD_POINTS)
+        np.save(f"ff_isotropic-{i}.npy", FF_isotropic)
 
-        epsilon = [[5.41474, 0], [0, 5.71539]]
+        epsilon = [[5.506406162670257, 0], [0, 5.802609321922376]]
 
         permittivity_dict = {1: epsilon, 2: epsilon, 3: np.identity(2)}
         print("Anisotropic Scattering with permittivity {} and n {}".format(permittivity_dict, i))
@@ -43,6 +44,7 @@ with open("results1.csv", "w", newline='') as csvfile:
         E_anisotropic = problem.solve(pw)
 
         _, FF_anisotropic = problem.get_far_field(E_anisotropic, FAR_FIELD_POINTS)
+        np.save(f"ff_anisotropic-{i}.npy", FF_isotropic)
 
         E_field_norm = errornorm(E_isotropic, E_anisotropic)
         FF_error = np.linalg.norm(FF_isotropic - FF_anisotropic)
