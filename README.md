@@ -1,11 +1,14 @@
 # Scattering2D
 
-Numeric code using Firedrake for solving Maxwell scattering problem with absorbing boundary conditions.
+FEM based solver using Firedrake for electromagnetic wave scattering in 2D
+on heterogeneous isotropic or anisotropic material with absorbing boundary
+conditions.
 
 # Usage and install
 
-Since this library is written on top of Firedrake, user should install Firedrake before running code here.
-At the time of writing this README, these are the relevant branches and commits for every package that firedrake needs.
+Since this library is written on top of Firedrake, user should install
+Firedrake before running code here. At the time of writing this README, these
+are the relevant branches and commits for every package that firedrake needs.
 
 ```
 Status of components:
