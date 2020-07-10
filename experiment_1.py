@@ -22,7 +22,7 @@ with open("results1.csv", "w", newline='') as csvfile:
                      "-setnumber", "lc1", str(LC1), "-setnumber", "lc2", str(LC2),
                      "mesh/hexa.geo"])
 
-        permittivity_dict = {1: 1, 2: 11.7, 3: 1}
+        permittivity_dict = {1: 1, 2: 11.8, 3: 1}
         s = np.array([1, 2])
         p = np.array([-2, 1])
         k0L = np.pi
@@ -36,7 +36,7 @@ with open("results1.csv", "w", newline='') as csvfile:
         phi, FF_isotropic = problem.get_far_field(E_isotropic, FAR_FIELD_POINTS)
         np.save(f"ff_isotropic-{i}.npy", FF_isotropic)
 
-        epsilon = [[5.506406162670257, 0], [0, 5.802609321922376]]
+        epsilon = [[5.54637936300038, 0], [0, 5.845776226164643]]
 
         permittivity_dict = {1: epsilon, 2: epsilon, 3: np.identity(2)}
         print("Anisotropic Scattering with permittivity {} and n {}".format(permittivity_dict, i))
