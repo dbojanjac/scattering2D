@@ -23,9 +23,6 @@ class PlaneWave():
         self.s = fd.as_vector(s)
         self.p = fd.as_vector(p)
 
-        print("[DEBUG] s = {}".format(s))
-        print("[DEBUG] p = {}".format(p))
-
     #TODO: this should be made abtract and other excitements should implement
     def interpolate(self, mesh, k0L):
         V = fd.VectorFunctionSpace(mesh, "CG", 1)
