@@ -1,240 +1,155 @@
-import dolfin as df
-import dolfin_utils
-import dolfin_utils.meshconvert
-from dolfin_utils.meshconvert import meshconvert
+import firedrake as fd
+from petsc4py import PETSc
 import numpy as np
-import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
-from uuid import uuid4
-from subprocess import run, PIPE
-import os
 
-if df.MPI.rank(df.mpi_comm_world()) == 0:
-    # test version like this because of portability chaos...
-    dolfin_version = run(['dolfin-version'],
-                                    stdout=PIPE).stdout.decode().strip('\n')
-    if dolfin_version != "2017.2.0":
-        raise AssertionError("You are using {} ".format(dolfin_version) +
-                "FEniCS and code is tested using 2017.2.0 FEniCS version.")
-
-
-def plane_wave(s, p, k0L):
-    #---------------------------------------------------------------------
-    # If vectors aren't orthogonal, make them orthogonal by ignoring
-    # electric field component in the direction of propagation
-    #---------------------------------------------------------------------
-    if np.dot(s, p) > 1E-8:
-        # Subtract from polarization vector projection in the direction
-        # of the propagation
-        p = p - (np.dot(s, p) / np.dot(s, s)) * s
-
-    # make unit vectors from s and p
-    s = s / np.linalg.norm(s)
-    p = p / np.linalg.norm(p)
-
-    pw_r = df.Expression(\
-        ('px * cos(k0L * (s_x * x[0] + s_y * x[1]))', \
-         'py * cos(k0L * (s_x * x[0] + s_y * x[1]))'),\
-        degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
-
-    pw_i = df.Expression(\
-        ('px * sin(k0L * (s_x * x[0] + s_y * x[1]))', \
-         'py * sin(k0L * (s_x * x[0] + s_y * x[1]))'),\
-        degree=1, px = p[0], py = p[1], s_x = s[0], s_y = s[1], k0L = k0L)
-
-    return pw_r, pw_i
-
-
-def plot_far_field(phi, FF, filename):
-    # Put maximum at 0dB
-    FF_max = abs(max(np.log10(FF)))
-    FF = 10 * (np.log10(FF) + FF_max)
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection = 'polar')
-    ax.plot(phi, FF, label = filename, c = 'b')
-    plt.legend(bbox_to_anchor = (0., 1.02, 1., .102), loc = 3,
-               ncol = 1, mode = "expand", borderaxespad = 0.)
-    ax.set_rmax(0);  ax.set_rmin(-10)
-    ax.set_rticks([-10, -5, 0, 2])
-
-    plt.plot()
-    plt.savefig("ff_" + filename + ".png")
-
-
+from .discrete_gradient import build_gradient
 
 class Scattering(ABC):
-    '''FEM based solver for electromagnetic wave scattering in 2D on
-    heterogeneous isotropic or anisotropic material.
-
-    solve() will solve the sistem and return real and imaginary fields.
-    User should pass excitation field of some sort.
-
-    get_far_field() will generate far_field array and return it or save it to
-    file if user passed output_file.'''
-    def __init__(self, mesh_filename, permittivity_dict, output_dir=None):
-        self.permittivity_dict = permittivity_dict
-
-        self.mesh, self.mesh_markers = self.__convert_mesh(mesh_filename)
-
-        self.dx_int = df.Measure('dx', domain=self.mesh,
-                subdomain_data=self.mesh_markers)
-
-
-    def __parse_h5(self, mesh_filename):
-        # generate relative mesh_filename, mesh_folder and mesh_name
-        rel_mesh_filename = os.path.relpath(mesh_filename)
-        mesh_folder = "/".join(mesh_filename.split("/")[:-1])
-        mesh_name = mesh_filename.split("/")[-1]
-
-        mesh = df.Mesh()
-        hdf = df.HDF5File(mesh.mpi_comm(), rel_mesh_filename, 'r')
-
-        hdf.read(mesh, mesh_folder + "/mesh", False)
-        mesh_markers = df.MeshFunction('int', mesh)
-        hdf.read(mesh_markers, mesh_folder + "/subdomains")
-
-        return mesh, mesh_markers
-
-
-    def __call_mesh_convert(self, mesh_filename):
-        mesh_id = str(uuid4())
-        mesh_xml = "/tmp/" + mesh_id + ".xml"
-        meshconvert.convert2xml(mesh_filename, mesh_xml)
-
-        mesh = df.Mesh(mesh_xml)
-        without_xml = os.path.splitext(mesh_xml)[0]
-        mesh_markers = df.MeshFunction("size_t", mesh, without_xml + "_physical_region.xml");
-
-        return mesh, mesh_markers
-
-
-    def __convert_mesh(self, mesh_filename):
-        if mesh_filename.endswith("h5"):
-            mesh, mesh_markers = self.__parse_h5(mesh_filename);
+    def __init__(self, mesh, k0L, output_dir="output"):
+        if isinstance(mesh, str):
+            self.mesh = fd.Mesh(mesh)
+        elif isinstance(mesh, fd.firedrake.mesh.MeshGeometry):
+            self.mesh = mesh
         else:
-            if df.MPI.rank(df.mpi_comm_world()) == 0:
-                print ("Calling FEniCS meshconvert util")
-                mesh, mesh_markers = self._call_mesh_convert(mesh_filename)
+            raise ValueError("Mesh object unknown")
+        self.output_dir = output_dir
+        self.k0L = k0L
 
-        return mesh, mesh_markers
+    # smoother for geometric multigrid
+    def hybrid_smoother(self, A, b, G):
+        GAMMA = 1
 
+        # generate vectors that are needed for algorithm
+        with b.dat.vec_ro as b_vec:
+            rhs_vec = b_vec.copy()
+            r_vec = b_vec.copy()
+            g_vec = b_vec.copy()
 
-    def solve(self, pw_r, pw_i, k0L):
-        #----------------------------------------------------------------------
-        # Finite Element function spaces (Nedelec N1curl space),
-        # mixed formulation
-        #----------------------------------------------------------------------
-        NED = df.FiniteElement('N1curl', self.mesh.ufl_cell(), 1)
-        V = df.FunctionSpace(self.mesh, 'N1curl', 1)
-        W = df.FunctionSpace(self.mesh, NED * NED)
+        # A_phi_mat = G^T * A * G
+        A_phi = G.transposeMatMult(A)               # G^T * A
+        A_phi = A_phi.matMult(G)                    # G^T * A * G
 
-        #----------------------------------------------------------------------
-        # Weak formulation (electromagnetic problem is formulated as mixed
-        # problem)
-        #----------------------------------------------------------------------
-        Es_r, Es_i = df.TrialFunctions(W)
-        v_r, v_i = df.TestFunctions(W)
-        n = df.FacetNormal(self.mesh)
+        g_phi_vec = A_phi.getVecLeft()
+        rhs_phi_vec = g_phi_vec.copy()
+        iteration = 0
+        while True:
+            A.mult(g_vec, rhs_vec)                  # rhs = A * g
+            r_vec = b_vec - rhs_vec                 # r = b - A * g
+            norm = r_vec.norm()
 
-        a_r = df.inner(df.curl(Es_r), df.curl(v_r)) * df.dx \
-            - k0L * k0L * df.inner(self.permittivity * Es_r, v_r) * df.dx \
-            + k0L * (df.inner(n, Es_i) * df.inner(n, v_r) - df.inner(Es_i, v_r)) * df.ds
+            print (norm)
+            iteration += 1
 
-        a_i = df.inner(df.curl(Es_i), df.curl(v_i)) * df.dx \
-            - k0L * k0L * df.inner(self.permittivity * Es_i, v_i) * df.dx \
-            - k0L * (df.inner(n, Es_r) * df.inner(n, v_i) - df.inner(Es_r, v_i)) * df.ds
+            #TODO: we can remove and have g = G * g_phi
+            g_vec.set(0)                            # g     <= 0
+            #TODO: add ZERO_INITIAL_GUESS and remove
+            g_phi_vec.set(0)                        # g_phi <= 0
 
-        L_r = -k0L * k0L * df.inner((self.II - self.permittivity) * pw_r, v_r) * df.dx
-        L_i = -k0L * k0L * df.inner((self.II - self.permittivity) * pw_i, v_i) * df.dx
+            # forward Gauss-Seidel
+            G.multTranspose(r_vec, rhs_phi_vec)         # rhs_phi = G^T * r
 
-        # Final variational form
-        F = a_r + a_i - L_r - L_i
+            # A_phi * g_phi = G^T * r
+            sortype_flags = PETSc.Mat.SORType.FORWARD_SWEEP
+            A_phi.SOR(rhs_phi_vec, g_phi_vec, sortype=sortype_flags, its=GAMMA)
 
-        # Splitting the variational F form into LHS and RHS
-        a, L = df.lhs(F), df.rhs(F)
+            # g <= g + G * g_phi
+            G.mult(g_phi_vec, rhs_vec)              # rhs = G * g_phi
 
-        #----------------------------------------------------------------------
-        # Assembling the system (unknown is a vector containing real and
-        # imaginary part as two unknown fields, mixed problem)
-        #----------------------------------------------------------------------
-        # Solution Function
-        es = df.Function(W); Es = es.vector()
+            g_vec += rhs_vec                        # g  <= g + G *
 
-        # Assemble RHS and LHS
-        A = df.assemble(a);    b = df.assemble(L);
+            # symmetric Gauss-Seidel
+            # A * g = r
+            sortype_flags = PETSc.Mat.SORType.SYMMETRY_SWEEP
+            A.SOR(r_vec, g_vec, sortype=sortype_flags, its=GAMMA)
 
-        # Solve the system using FEniCS implemented direct solver
-        df.solve(A, Es, b)
+            # backward Gauss-Seidel
+            A.mult(g_vec, rhs_vec)                      # rhs   = A * g
+            r_vec -= rhs_vec                            # r = r - A * g
+            G.multTranspose(r_vec, rhs_phi_vec)         # rhs = G^T * g_phi
 
-        #----------------------------------------------------------------------
-        # Solution field is equal to sum of incoming and scattered wave
-        #----------------------------------------------------------------------
-        # Split Solution into real and imaginary part
-        Es_r, Es_i = es.split()
+            #TODO: add ZERO_INITIAL_GUESS and remove
+            g_phi_vec.set(0)                        # g_phi = 0
 
-        # Interpolate incoming plane wave into N1Curl Function Space
-        EI_r = df.interpolate(pw_r, V); EI_i = df.interpolate(pw_i, V)
+            # A_phi * g_phi = rhs
+            sortype_flags = PETSc.Mat.SORType.BACKWARD_SWEEP
+            A_phi.SOR(rhs_phi_vec, g_phi_vec, sortype=sortype_flags, its=GAMMA)
 
-        # Total Field = Incident Field + Scattered Field
-        E_r = Es_r + EI_r;  E_i = Es_i + EI_i
+            G.mult(g_phi_vec, rhs_vec)              # rhs = G * g_phi
+            g_vec += rhs_vec                        # g = g + rhs
 
-        return E_r, E_i
-
-
-    @abstractmethod
-    def _get_ff_component(self, k0L, A1, A2, E_r, fr, E_i, fi, e1, e2):
-        #----------------------------------------------------------------------
-        # Calculating components of far field pattern (real and imaginary part)
-        # according to Mischenko: Electromagnetic scattering by Particles and
-        # Particle Groups. Cambridge University Press
-        #
-        # We will split implementation for scalar and tensor values. Scalar
-        # implementation can be found in scattering/isotropic_scattering.py
-        # and tensor implementation can be found in
-        # scattering/anisotropic_scattering.py
-        #----------------------------------------------------------------------
-        pass
+        return g
 
 
-    def get_far_field(self, FF_n, k0L, E_r, E_i, output_file = None):
-        step = 1 / float(FF_n - 1)
+    def solve(self, incident, method="lu"):
+        Ei = incident.interpolate(self.mesh, self.k0L)
+        mesh = Ei.ufl_domain()
 
-        phi = np.linspace(step / 2, 2 * np.pi - step / 2, num = FF_n)
+        V = fd.FunctionSpace(mesh, 'N1curl', 1)
+        Es = fd.Function(V)
+        u = fd.TrialFunction(V)
+        v = fd.TestFunction(V)
+        n = fd.FacetNormal(mesh)
+        x = fd.SpatialCoordinate(mesh)
+        epsilon = self.permittivity
+        k = self.k0L
+        ik = (1j * k)
 
-        FF_r1 = np.zeros(FF_n); FF_r2 = np.zeros(FF_n)
-        FF_i1 = np.zeros(FF_n); FF_i2 = np.zeros(FF_n)
+        a = (fd.inner(fd.curl(u), fd.curl(v)) * fd.dx
+            - k**2 * fd.inner(epsilon * u, v) * fd.dx
+            - ik * ((fd.dot(u, n) * fd.inner(n, v)) - fd.inner(u, v)) * fd.ds)
+        L = - k**2 * fd.inner((self.II - epsilon) * Ei, v) * fd.dx
+
+        solvers = {
+            "lu": {
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+                "pc_factor_mat_solver_type": "mumps",
+                "mat_mumps_icntl_4": "1"},
+        }
+
+        A = fd.assemble(a)
+        b = fd.assemble(L)
+
+        solver = fd.LinearSolver(A, solver_parameters=solvers[method])
+        solver.solve(Es, b)
+
+        E = fd.project(Es + Ei, V)
+
+        return E
+
+
+    def get_far_field(self, E, FF_n):
+        phi = np.linspace(0, 2 * np.pi, num = FF_n, endpoint = False)
         FF = np.zeros(FF_n)
-
-        # Unit vectors in i and j direction
-        e1 = df.as_vector([1, 0]);   e2 = df.as_vector([0, 1])
 
         cos_values = np.cos(phi)
         sin_values = np.sin(phi)
-        rx = df.Constant(1.0)
-        ry = df.Constant(0.0)
 
-        for n in range (0, FF_n):
-            rx.assign(cos_values[n])
-            ry.assign(sin_values[n])
+        V3 = fd.VectorFunctionSpace(self.mesh, "CG", 1)
+        V = fd.FunctionSpace(self.mesh, "CG", 1)
+        v = fd.TestFunction(V3)
+        x = fd.SpatialCoordinate(self.mesh)
+        k = self.k0L
+        epsilon = self.permittivity
 
-            fr = df.Expression('cos(k0L * (rx * x[0] + ry * x[1]))', \
-                degree = 1, k0L = k0L, rx = rx, ry = ry)
+        r = fd.Constant([1, 0])
 
-            fi = df.Expression('sin(k0L * (rx * x[0] + ry * x[1]))', \
-                degree = 1, k0L = k0L, rx = rx, ry = ry)
+        for n in range(FF_n):
+            rx = cos_values[n]
+            ry = sin_values[n]
 
-            # unit matrix - permittivity_matrx
-            A1 = df.Constant([[1 - rx * rx, rx * ry], [0, 0]])
-            A2 = df.Constant([[0, 0], [rx * ry, 1 - ry * ry]])
+            r_vals = np.array([rx, ry])
+            r.assign(r_vals)
+            A = np.identity(2) - np.outer(r_vals, r_vals)
 
-            #TODO: compile list of subdomains where permittivity is not eq 1
-            FF[n] = self._get_ff_component(k0L, A1, A2, E_r, fr, E_i, fi, e1, e2)
-        FF = np.sqrt(FF)
+            f = fd.exp(1j * self.k0L * fd.dot(r, x))
 
-        if output_file:
-            with open(output_file, "w+") as f:
-                for angle, ff in zip(phi, FF):
-                    f.write("{} {}\n".format(angle, ff))
+            #TODO: don't integrate if integral is zero
+            ffi = fd.assemble(fd.inner((epsilon - self.II) * E * f, v)  * fd.dx)
+            # here we have [real_0 + imag_0, ..., real_d + imag_d]
+            ff_components = np.sum(ffi.dat.data_ro, axis=0)
+
+            FF[n] = np.linalg.norm(k**2 /(4 * np.pi) * A.dot(ff_components))
 
         return phi, FF

@@ -1,0 +1,8 @@
+*.pyc
+__pycache__/
+*.vtu
+*.pvd
+*.msh
+*.png
+*.pdf
+*.npy

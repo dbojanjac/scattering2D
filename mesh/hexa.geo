@@ -1,5 +1,3 @@
-n = 4;
-
 /*********************************************************************
  *
  *  HEXA square unit cell in 2D inside circle
@@ -21,8 +19,8 @@ alt = 1;
 h = 1 / n;
 
 // Meshing parameters
-lc1 = 3 * 1e-2 * h;
-lc2 = 5 * 1e-2;
+//lc1 = 5 * 1e-2 * h;
+//lc2 = 5 * 1e-2;
 lc3 = 8 * 1e-2;
 
 
