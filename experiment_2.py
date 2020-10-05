@@ -52,7 +52,7 @@ def run_isotropic(s, p, k0L):
 create_hexa_mesh(FINE)
 FF_isotropic_control = run_isotropic(s, p, k0L)
 
-with open("results2.csv", "w", newline='') as csvfile:
+with open("results/results2.csv", "w", newline='') as csvfile:
     results = [("lc1", "#cells", "#edges", "#cell_elems", "abs FF norm", "rel FF norm")]
     result_writer = csv.writer(csvfile, delimiter=',')
 
@@ -66,7 +66,6 @@ with open("results2.csv", "w", newline='') as csvfile:
 
     num_cells = problem.mesh.num_cells()
     num_edges = problem.mesh.num_edges()
-    #E_field_norm = errornorm(E_isotropic, E_anisotropic).real
     abs_FF_error = np.linalg.norm(FF_isotropic_control - FF_anisotropic)
     rel_FF_error = abs_FF_error/np.linalg.norm(FF_isotropic_control)
     print(f"{num_cells} {num_edges} {abs_FF_error} {rel_FF_error}")

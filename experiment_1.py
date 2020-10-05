@@ -13,7 +13,7 @@ def run_command(args):
     print("Running command: {}".format(" ".join(args)))
     run(args, stdout=DEVNULL, check=True)
 
-with open("results1.csv", "w", newline='') as csvfile:
+with open("results/results1.csv", "w", newline='') as csvfile:
     results = [("Number of elements in cell", "E_field_norm", "FF norm", "rel E norm", "rel FF norm")]
     result_writer = csv.writer(csvfile, delimiter=',')
     for i in range(1, NUM_EXPERIMENTS):
@@ -33,10 +33,10 @@ with open("results1.csv", "w", newline='') as csvfile:
         pw = PlaneWave(s, p)
 
         E_isotropic = problem.solve(pw)
-        File(f"isotropic_{i}.pvd").write(E_isotropic)
+        File(f"results/isotropic_{i}.pvd").write(E_isotropic)
 
         phi, FF_isotropic = problem.get_far_field(E_isotropic, FAR_FIELD_POINTS)
-        np.save(f"ff_isotropic-{i}.npy", FF_isotropic)
+        np.save(f"results/ff_isotropic-{i}.npy", FF_isotropic)
 
         epsilon = [[5.46549124, 0], [0, 5.7717177]]
 
@@ -44,10 +44,10 @@ with open("results1.csv", "w", newline='') as csvfile:
         print("Anisotropic Scattering with permittivity {} and n {}".format(permittivity_dict, i))
         problem = AnisotropicScattering(problem.mesh, permittivity_dict, k0L)
         E_anisotropic = problem.solve(pw)
-        File(f"anisotropic_{i}.pvd").write(E_anisotropic)
+        File(f"results/anisotropic_{i}.pvd").write(E_anisotropic)
 
         _, FF_anisotropic = problem.get_far_field(E_anisotropic, FAR_FIELD_POINTS)
-        np.save(f"ff_anisotropic-{i}.npy", FF_isotropic)
+        np.save(f"results/ff_anisotropic-{i}.npy", FF_isotropic)
 
         E_field_norm = errornorm(E_isotropic, E_anisotropic)
         rel_E_field_norm = E_field_norm / norm(E_isotropic)
