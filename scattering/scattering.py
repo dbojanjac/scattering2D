@@ -29,8 +29,11 @@ class Scattering(ABC):
         ik = (1j * k)
 
         a = (fd.inner(fd.curl(u), fd.curl(v)) * fd.dx
-            - k**2 * fd.inner(epsilon * u, v) * fd.dx
-            - ik * ((fd.dot(u, n) * fd.inner(n, v)) - fd.inner(u, v)) * fd.ds)
+            - k**2 * fd.inner(epsilon * u, v) * fd.dx)
+        if (self.mesh.topological_dimension() == 3):
+                a -= ik * fd.inner((fd.cross(n, fd.cross(n, u))), v) * fd.ds
+        else:
+                a -= ik * ((fd.dot(u, n) * fd.inner(n, v)) - fd.inner(u, v)) * fd.ds
         L = - k**2 * fd.inner((self.II - epsilon) * Ei, v) * fd.dx
 
         solvers = {
@@ -51,6 +54,9 @@ class Scattering(ABC):
 
 
     def get_far_field(self, E, FF_n):
+        if (self.mesh.topological_dimension() == 3):
+            raise NotImplementedError("FF is not straight forward in 3D.")
+
         phi = np.linspace(0, 2 * np.pi, num = FF_n, endpoint = False)
         FF = np.zeros(FF_n)
 
