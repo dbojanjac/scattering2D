@@ -24,8 +24,8 @@ with open("results/results1.csv", "w", newline='') as csvfile:
                      "mesh/hexa.geo"])
 
         permittivity_dict = {1: 1, 2: 11.8, 3: 1}
-        s = np.array([1, 2])
-        p = np.array([-2, 1])
+        s = np.array([-1, -2])
+        p = np.array([2, -1])
         k0L = np.pi
 
         print("Isotropic Scattering with permittivity {} and n {}".format(permittivity_dict, i))

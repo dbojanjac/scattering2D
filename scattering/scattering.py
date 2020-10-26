@@ -81,7 +81,7 @@ class Scattering(ABC):
             r.assign(r_vals)
             A = np.identity(tdim) - np.outer(r_vals, r_vals)
 
-            f = fd.exp(1j * self.k0L * fd.dot(r, x))
+            f = fd.exp(-1j * self.k0L * fd.dot(r, x))
 
             #TODO: don't integrate if integral is zero
             ffi = fd.assemble(fd.inner((epsilon - self.II) * E * f, v)  * fd.dx)
