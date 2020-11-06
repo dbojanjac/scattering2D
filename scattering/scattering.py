@@ -53,15 +53,9 @@ class Scattering(ABC):
         return fd.project(Es + Ei, V)
 
 
-    def get_far_field(self, E, FF_n):
-        if (self.mesh.topological_dimension() == 3):
-            raise NotImplementedError("FF is not straight forward in 3D.")
-
-        phi = np.linspace(0, 2 * np.pi, num = FF_n, endpoint = False)
-        FF = np.zeros(FF_n)
-
-        cos_values = np.cos(phi)
-        sin_values = np.sin(phi)
+    def get_far_field(self, E, ff_num_samples, theta=np.pi/2):
+        phi = np.linspace(0, 2 * np.pi, num = ff_num_samples, endpoint = False)
+        ff_data = np.zeros(ff_num_samples)
 
         V3 = fd.VectorFunctionSpace(self.mesh, "CG", 1)
         V = fd.FunctionSpace(self.mesh, "CG", 1)
@@ -71,13 +65,20 @@ class Scattering(ABC):
         epsilon = self.permittivity
         tdim = self.mesh.topological_dimension()
 
-        r = fd.Constant([1, 0])
+        if tdim == 2:
+            r = fd.Constant([1, 0])
+        else:
+            r = fd.Constant([1, 0, 0])
 
-        for n in range(FF_n):
-            rx = cos_values[n]
-            ry = sin_values[n]
+        for n in range(ff_num_samples):
+            if tdim == 2:
+                r_vals = [np.cos(phi[n]),
+                          np.sin(phi)]
+            else:
+                r_vals = [np.sin(theta) * np.cos(phi[n]),
+                          np.sin(theta) * np.sin(phi[n]),
+                          np.cos(theta)]
 
-            r_vals = np.array([rx, ry])
             r.assign(r_vals)
             A = np.identity(tdim) - np.outer(r_vals, r_vals)
 
@@ -86,8 +87,10 @@ class Scattering(ABC):
             #TODO: don't integrate if integral is zero
             ffi = fd.assemble(fd.inner((epsilon - self.II) * E * f, v)  * fd.dx)
             # here we have [real_0 + imag_0, ..., real_d + imag_d]
+            #TODO: mpi gather and then sum
             ff_components = np.sum(ffi.dat.data_ro, axis=0)
 
-            FF[n] = np.linalg.norm(k**2 /(4 * np.pi) * A.dot(ff_components))
+            # ff_components = [sum_along_0, sum_along_1, ..., sum_along_d]
+            ff_data[n] = np.linalg.norm(k**2 /(4 * np.pi) * A.dot(ff_components))
 
-        return phi, FF
+        return phi, ff_data

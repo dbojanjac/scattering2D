@@ -8,6 +8,6 @@ class IsotropicScattering(Scattering):
         self.II = 1
         self.permittivity = fd.Function(fd.FunctionSpace(self.mesh, "DG", 0))
 
-        for (subdomain_id, epsilon) in permittivity_dict.items():
-            self.permittivity.interpolate(fd.Constant(epsilon),
-                                          self.mesh.measure_set("cell", subdomain_id))
+        for (subd_id, epsilon) in permittivity_dict.items():
+            epsilon_const = fd.Constant(epsilon)
+            self.permittivity.interpolate(epsilon_const, self.mesh.measure_set("cell", subd_id))
