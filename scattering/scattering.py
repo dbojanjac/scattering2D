@@ -87,8 +87,7 @@ class Scattering(ABC):
             #TODO: don't integrate if integral is zero
             ffi = fd.assemble(fd.inner((epsilon - self.II) * E * f, v)  * fd.dx)
             # here we have [real_0 + imag_0, ..., real_d + imag_d]
-            #TODO: mpi gather and then sum
-            ff_components = np.sum(ffi.dat.data_ro, axis=0)
+            ff_components = np.sum(ffi.vector().gather().reshape(-1, tdim), axis=0)
 
             # ff_components = [sum_along_0, sum_along_1, ..., sum_along_d]
             ff_data[n] = np.linalg.norm(k**2 /(4 * np.pi) * A.dot(ff_components))
