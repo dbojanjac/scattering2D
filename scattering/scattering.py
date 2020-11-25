@@ -44,6 +44,7 @@ class Scattering(ABC):
                 "mat_mumps_icntl_4": "1"},
         }
 
+        #TODO: LinearVariationalSolver
         A = fd.assemble(a)
         b = fd.assemble(L)
 
@@ -73,7 +74,7 @@ class Scattering(ABC):
         for n in range(ff_num_samples):
             if tdim == 2:
                 r_vals = [np.cos(phi[n]),
-                          np.sin(phi)]
+                          np.sin(phi[n])]
             else:
                 r_vals = [np.sin(theta) * np.cos(phi[n]),
                           np.sin(theta) * np.sin(phi[n]),

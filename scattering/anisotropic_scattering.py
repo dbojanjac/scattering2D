@@ -1,4 +1,5 @@
 import firedrake as fd
+import numpy as np
 
 from .scattering import Scattering
 
