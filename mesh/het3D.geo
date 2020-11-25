@@ -1,4 +1,4 @@
-n = 2;
+n = 6;
 
 /*********************************************************************
  *
@@ -117,11 +117,11 @@ osl = newreg; Surface Loop(osl) = {top[], surfaces[], sSi, outSi[0], outSi[2], o
 Color Blue{ Volume{ phy[] }; }
 Color Yellow{ Volume{ outSi[1] }; }
 
-// Volume 10 is air
-Physical Volume(10) = {phy[]};
+// Volume 1 is air
+Physical Volume(1) = {phy[]};
 
-// Volume 20 is Si
-Physical Volume(20) = {outSi[1]};
+// Volume 2 is Si
+Physical Volume(2) = {outSi[1]};
 
 
 // Outer Box
@@ -159,5 +159,5 @@ slmb = newreg; Volume(slmb) = {loop, osl};
 
 Coherence Mesh;
 
-// Volume 30 is outer box air
-Physical Volume(30) = slmb;
+// Volume 3 is outer box air
+Physical Volume(3) = slmb;
