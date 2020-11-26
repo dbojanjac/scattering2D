@@ -15,9 +15,13 @@ def run_isotropic_test(mesh_file, s, p):
     phi, FF = problem.get_far_field(E, 40)
     #plot_far_field(phi, FF, "isotropic")
 
+def run_2d_isotropic_test():
+    run_isotropic_test("mesh/hexa.msh", np.array([-1, -2]), np.array([2, -1]))
+
+
+def run_3d_isotropic_test():
+    run_isotropic_test("mesh/het3D.msh", np.array([-1, -2, 0]), np.array([2, -1, 0]))
+
 if __name__ == "__main__":
-    mesh_files = ("mesh/hexa.msh", "mesh/het3D.msh")
-    s_vecs = ([-1, -2], [-1, -2, 0])
-    p_vecs = ([2, -1], [2, -1, 0])
-    for mesh_file, s, p in zip(mesh_files, s_vecs, p_vecs):
-        run_isotropic_test(mesh_file, np.array(s), np.array(p))
+    run_2d_isotropic_test()
+    run_3d_isotropic_test()
