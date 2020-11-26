@@ -13,8 +13,8 @@ HOMO_MESH = "mesh/homo.msh"
 HOMO_FILE = "mesh/homo.geo"
 HEXA_MESH = "mesh/hexa.msh"
 HEXA_FILE = "mesh/hexa.geo"
-s = np.array([1, 2])
-p = np.array([-2, 1])
+s = np.array([-1, -2])
+p = np.array([2, -1])
 pw = PlaneWave(s, p)
 k0L = np.pi
 

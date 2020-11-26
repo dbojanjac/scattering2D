@@ -1,15 +1,22 @@
-import firedrake as fd
+import numpy as np
+from firedrake import as_matrix, Function, TensorFunctionSpace
 
 from .scattering import Scattering
 
 class AnisotropicScattering(Scattering):
-    def __init__(self, mesh, permittivity_dict, k0L, **kvargs):
-        super().__init__(mesh, k0L, **kvargs)
-        self.II = fd.as_matrix(((1, 0), (0,1)))
-        self.permittivity = fd.Function(fd.TensorFunctionSpace(self.mesh, "DG", 0))
+    """
+    Derived class for AnisotropicScattering
+
+    Computation using this object models material as an anisotropic scatterer. Permittivity of
+    each material is modeled using tensor.
+    """
+    def __init__(self, mesh, permittivity_dict, k0L, **kwargs):
+        super().__init__(mesh, k0L, **kwargs)
+        # identity here is matrix
+        self.II = as_matrix(np.identity(self.mesh.topological_dimension()))
+        self.permittivity = Function(TensorFunctionSpace(self.mesh, "DG", 0))
 
         for (subd_id, epsilon_tensor) in permittivity_dict.items():
-            epsilon = fd.as_matrix(epsilon_tensor)
-            self.permittivity.interpolate(epsilon,
+            self.permittivity.interpolate(as_matrix(epsilon_tensor),
                                           self.mesh.measure_set("cell", subd_id))
 
