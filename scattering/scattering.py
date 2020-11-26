@@ -63,7 +63,8 @@ class Scattering(ABC):
         else:
             raise ValueError("incident object unknown")
 
-        V = fd.FunctionSpace(self.mesh, 'N1curl', 1)
+        V_el = fd.FiniteElement('N1curl', self.mesh.ufl_cell(), 1, variant="integral")
+        V = fd.FunctionSpace(self.mesh, V_el)
         Es = fd.Function(V)
         u = fd.TrialFunction(V)
         v = fd.TestFunction(V)
